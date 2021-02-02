@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"sort"
-
+	"path/filepath"
 	// "io"
 	"io/ioutil"
 	"os"
@@ -118,27 +118,28 @@ func GenerateSpecFileFolder(zipFilePath string, publicKeyFilePath string, privat
 	for i := 0; i < len(fragmentGroup); i++ {
 		groupNum := len(fragmentGroup[i])
 		for j := 0; j < groupNum; j++ {
-			var groupSN = int32(i)
+			var groupSN = int8(i)
 			var groupContent []int8
-			var fragmentDataLength = int32(len(fragmentGroup[i][j]))
-			for k := 0; k < groupNum; k++ {
+			for k := 0; k < groupNum-1; k++ {
 				groupContent = append(groupContent, int8(i*len(fragmentGroup[0])+k))
 			}
+			var fragmentDataLength = int32(len(fragmentGroup[i][j]))
 			var isRedundant = bool(j+1 == groupNum) // 如果是组中最后一个分片,那就是冗余分片
-			var fragmentSN int32
+			var fragmentSN int8
 			if isRedundant {
 				fragmentSN = -1
 			} else {
-				fragmentSN = int32(i*len(fragmentGroup[0]) + j)
+				fragmentSN = int8(i*len(fragmentGroup[0]) + j)
 			}
-			headerBytes, err := header.GenerateHeaderBytes("lemon", "cherry", "1.txt", 999, 999, 999, fragmentDataLength, fragmentSN, 999, 999, groupSN, groupContent)
+			headerBytes, err := header.GenerateHeaderBytes("lemon", "cherry", "1.txt", 999, 999, 999, fragmentDataLength, 999, 999, groupSN, fragmentSN, groupContent)
 			if err != nil {
 				return err
 			}
 			specFileBytes := bytesCombine(headerBytes, fragmentGroup[i][j])
 			// 生成数据交换文件
-			filePath := fmt.Sprintf("%s%s%s", folderDir, "/", strconv.Itoa(i*len(fragmentGroup[0])+j))
+			filePath := filepath.Join(folderDir, strconv.Itoa(i*len(fragmentGroup[0])+j))
 			filetools.WriteFile(filePath, specFileBytes, 0777)
+			
 		}
 	}
 	return err
@@ -156,22 +157,62 @@ func getSpecFilePathListFromFolder(folderDir string) ([]string, error) {
 		if file.IsDir() || file.Name()[0] == '.' {
 			continue
 		}
-		filePath := fmt.Sprintf("%s%s%s", folderDir, "/", file.Name())
+		filePath := filepath.Join(folderDir, file.Name())
 		filePathList = append(filePathList, filePath)
 	}
 	return filePathList, err
 }
 
-func restoreLostDataFragment(groupSN_GroupInfoMap map[int]GroupInfo, fragmentSN_DataFileInfoMap map[int]FileInfo) error {
+func restorelostDataFragment(groupSN_GroupInfoMap map[int]GroupInfo, fragmentSN_DataFileInfoMap *map[int]FileInfo) error {
 	var err error
 	for groupSN := range groupSN_GroupInfoMap {
 		groupInfo := groupSN_GroupInfoMap[groupSN]
 		expectedGroupTotal := len(groupInfo.RedundanceFileInfo.Header.GetGroupContent())
-		acturalGroupTotal := len(groupSN_GroupInfoMap[groupSN].DataFileInfoList)
+		acturalGroupTotal := len(groupInfo.DataFileInfoList)
 		if expectedGroupTotal == acturalGroupTotal { // 数据分片已经收齐
 			continue
 		} else if expectedGroupTotal == acturalGroupTotal+1 { // 组里面只丢失了一个数据分片,用其他数据分片和冗余分片还原丢失数据分片
-
+			var lostDataFragmentSN int8 = -1
+			for _, fragmentSN := range groupInfo.RedundanceFileInfo.Header.GetGroupContent() {
+				for _, dataFileInfo := range groupInfo.DataFileInfoList {
+					if fragmentSN != dataFileInfo.Header.GetFragmentSN() {
+						lostDataFragmentSN = fragmentSN
+						break
+					}
+				}
+			}
+			var restoreGroup [][]byte
+			for _, fileInfo := range append(groupInfo.DataFileInfoList, groupInfo.RedundanceFileInfo) {
+				f, err := os.Open(fileInfo.FilePath)
+				if err != nil {
+					fmt.Println("无法打开数据交换文件", fileInfo.FilePath)
+					return err
+				}
+				fragmentBytes := make([]byte, fileInfo.FileStructure.DataStructure.length)
+				f.ReadAt(fragmentBytes, int64(fileInfo.FileStructure.DataStructure.Start)) // 将数据读取到fragmentBytes里面
+				f.Close()
+				restoreGroup = append(restoreGroup, fragmentBytes)
+			}
+			lostDataFragmentBytes := redundance.RestoreLostFragment(restoreGroup[:len(restoreGroup)-2], restoreGroup[len(restoreGroup)-1])
+			lostDataFragmentHeader := groupInfo.DataFileInfoList[0].Header
+			(&lostDataFragmentHeader).SetFragmentSN(lostDataFragmentSN)
+			lostDataFragmentHeaderBytes, err := lostDataFragmentHeader.HeaderToBytes()
+			dir, _ := filepath.Split(groupInfo.RedundanceFileInfo.FilePath)
+			fileName := strconv.Itoa(int(lostDataFragmentSN))
+			lostDataFilePath := filepath.Join(dir, fileName)
+			if err != nil {
+				return err
+			}
+			lostDataFileBytes := bytesCombine(lostDataFragmentHeaderBytes, lostDataFragmentBytes)
+			// 生成数据交换文件
+			filetools.WriteFile(lostDataFilePath, lostDataFileBytes, 0777)
+			lostDataFileStructure := groupInfo.RedundanceFileInfo.FileStructure
+			lostDataFileInfo := FileInfo{lostDataFilePath, lostDataFileStructure, lostDataFragmentHeader}
+			(*fragmentSN_DataFileInfoMap)[int(lostDataFragmentSN)] = lostDataFileInfo
+		} else { // 丢失了多个数据分片
+			fmt.Println("丢失了太多分片,无法还原")
+			err = fmt.Errorf("丢失了太多分片,无法还原")
+			return err
 		}
 	}
 	return err
@@ -215,7 +256,7 @@ func generateSortedDataFileInfoList(filePathList []string) ([]FileInfo, error) {
 		}
 	}
 	// 检查每个冗余分组是否收齐了所有的数据分片,并尝试对丢失的数据分片进行还原
-
+	restorelostDataFragment(groupSN_GroupInfoMap, &fragmentSN_DataFileInfoMap)
 	// 去除冗余分片
 	var fragmentSNList []int
 	for fragmentSN := range fragmentSN_DataFileInfoMap {
@@ -248,7 +289,7 @@ func RestoreFromSpecFileFolder(zipFilePath string, publicKeyFilePath string, pri
 			return err
 		}
 		fragmentBytes := make([]byte, dataFileInfo.FileStructure.DataStructure.length)
-		f.ReadAt(fragmentBytes, int64(dataFileInfo.FileStructure.DataStructure.Start)) // 将头部读取到headerBytes里面
+		f.ReadAt(fragmentBytes, int64(dataFileInfo.FileStructure.DataStructure.Start)) // 将数据读取到fragmentBytes里面
 		f.Close()
 		sortedFragmentList = append(sortedFragmentList, fragmentBytes)
 	}
