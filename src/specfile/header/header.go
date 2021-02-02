@@ -17,33 +17,28 @@ type Header struct {
 	FullDataLength     int32     // 待传输文件的长度
 	Identification     int32     // 标识.一个文件的所有分片有相同的标识
 	DivideMethod       int32     // 划分方式(2片?4片?8片?)
-	FragmentDataLength int32     // 分片的数据部分长度
-	FragmentSN         int32     // 分片序号
+	FragmentDataLength int32     // 加密后分片的数据部分长度
+	FragmentSN         int32     // 分片序号(如果是冗余分片,则序号为-1)
 	Timer              int32     // 分片的TTL
 	Nonce              int32     // 防止重放攻击的随机数
-	RedundantSN        int32     // 冗余分组序列号
-	RedundantTotal     int32     // 本冗余分组的分片总数
-	IsRedundant        bool      // 是否为冗余分片：否/是
+	GroupSN            int32     // 冗余分组序列号
+	GroupContent       [8]int8   // 本冗余分组中所有数据分片的FragmentSN
 }
 
 // 生成一个Header
-func (h *Header) generateHeader(senderName, receiverName, fileName string, fullDataLength, identification, fragmentDataLength, divideMethod, fragmentSN, timer, nonce, redundantSN, redundantTotal int32, isRedundant bool) {
-	senderNameBytes := []byte(senderName)
-	copy((*h).SenderName[:len(senderNameBytes)], senderNameBytes)
-	receiverNameBytes := []byte(receiverName)
-	copy((*h).ReceiverName[:len(receiverNameBytes)], receiverNameBytes)
-	fileNameBytes := []byte(fileName)
-	copy((*h).FileName[:len(fileNameBytes)], fileNameBytes)
-	(*h).FullDataLength = fullDataLength
-	(*h).Identification = identification
-	(*h).DivideMethod = divideMethod
-	(*h).FragmentDataLength = fragmentDataLength
-	(*h).FragmentSN = fragmentSN
-	(*h).Timer = timer
-	(*h).Nonce = nonce
-	(*h).RedundantSN = redundantSN
-	(*h).RedundantTotal = redundantTotal
-	(*h).IsRedundant = isRedundant
+func (h *Header) generateHeader(senderName, receiverName, fileName string, fullDataLength, identification, divideMethod, fragmentDataLength, fragmentSN, timer, nonce, groupSN int32, groupContent []int8) {
+	h.SetSenderName(senderName)
+	h.SetReceiverName(receiverName)
+	h.SetFileName(fileName)
+	h.SetFullDataLength(fullDataLength)
+	h.SetIdentification(identification)
+	h.SetFragmentDataLength(fragmentDataLength)
+	h.SetDivideMethod(divideMethod)
+	h.SetFragmentSN(fragmentSN)
+	h.SetTimer(timer)
+	h.SetNonce(nonce)
+	h.SetGroupSN(groupSN)
+	h.SetGroupContent(groupContent)
 }
 
 // 将Header结构体转为bytes
@@ -55,7 +50,15 @@ func (h *Header) headerToBytes() ([]byte, error) {
 		fmt.Println("无法成功将header转为bytes", err)
 		return nil, err
 	}
-	return buf.Bytes(), err
+	headerBytes := buf.Bytes()
+	return headerBytes, err
+}
+
+// 得知header转为bytes占用的空间
+func GetHeaderBytesSize() int {
+	var header Header
+	headerBytes, _ := (&header).headerToBytes()
+	return len(headerBytes)
 }
 
 // 将以bytes形式存储的结构体还原回结构体
@@ -72,9 +75,9 @@ func (h *Header) bytesToHeader(readBytes []byte) error {
 }
 
 // 生成一个结构体,并将结构体转为对应的bytes
-func GenerateHeaderBytes(senderName, receiverName, fileName string, fullDataLength, identification, divideMethod, fragmentDataLength, fragmentSN, timer, nonce, redundantSN, redundantTotal int32, isRedundant bool) ([]byte, error) {
+func GenerateHeaderBytes(senderName, receiverName, fileName string, fullDataLength, identification, divideMethod, fragmentDataLength, fragmentSN, timer, nonce, groupSN int32, groupContent []int8) ([]byte, error) {
 	var header *Header = &Header{}
-	header.generateHeader(senderName, receiverName, fileName, fullDataLength, identification, divideMethod, fragmentDataLength, fragmentSN, timer, nonce, redundantSN, redundantTotal, isRedundant)
+	header.generateHeader(senderName, receiverName, fileName, fullDataLength, identification, divideMethod, fragmentDataLength, fragmentSN, timer, nonce, groupSN, groupContent)
 	headerBytes, err := header.headerToBytes()
 	return headerBytes, err
 }
@@ -86,9 +89,9 @@ func ReadHeaderFromSpecFileBytes(bytes []byte) (Header, error) {
 	return *header, err
 }
 
-func (h *Header) GetSenderName() string {
+func (h Header) GetSenderName() string {
 	var senderNameBytes []byte
-	for _, v := range (*h).SenderName {
+	for _, v := range h.SenderName {
 		if v == 0 {
 			break
 		}
@@ -147,16 +150,19 @@ func (h Header) GetNonce() int32 {
 	return h.Nonce
 }
 
-func (h Header) GetRedundantSN() int32 {
-	return h.RedundantSN
+func (h Header) GetGroupSN() int32 {
+	return h.GroupSN
 }
 
-func (h Header) GetRedundantTotal() int32 {
-	return h.RedundantTotal
-}
-
-func (h Header) GetIsRedundant() bool {
-	return h.IsRedundant
+func (h Header) GetGroupContent() []int8 {
+	var groupContent []int8
+	for _, v := range h.GroupContent {
+		if v == -1 {
+			break
+		}
+		groupContent = append(groupContent, v)
+	}
+	return groupContent
 }
 
 func (h *Header) SetSenderName(senderName string) {
@@ -182,12 +188,12 @@ func (h *Header) SetIdentification(identification int32) {
 	(*h).Identification = identification
 }
 
-func (h *Header) SetDivideMethod(divideMethod int32) {
-	(*h).DivideMethod = divideMethod
-}
-
 func (h *Header) SetFragmentDataLength(fragmentDataLength int32) {
 	(*h).FragmentDataLength = fragmentDataLength
+}
+
+func (h *Header) SetDivideMethod(divideMethod int32) {
+	(*h).DivideMethod = divideMethod
 }
 
 func (h *Header) SetFragmentSN(fragmentSN int32) {
@@ -202,14 +208,11 @@ func (h *Header) SetNonce(nonce int32) {
 	(*h).Nonce = nonce
 }
 
-func (h *Header) SetRedundantSN(redundantSN int32) {
-	(*h).RedundantSN = redundantSN
+func (h *Header) SetGroupSN(groupSN int32) {
+	(*h).GroupSN = groupSN
 }
 
-func (h *Header) SetRedundantTotal(redundantTotal int32) {
-	(*h).RedundantTotal = redundantTotal
-}
-
-func (h *Header) SetIsRedundant(isRedundant bool) {
-	(*h).IsRedundant = isRedundant
+func (h *Header) SetGroupContent(groupContent []int8) {
+	(*h).GroupContent = [8]int8{-1, -1, -1, -1, -1, -1, -1, -1}
+	copy((*h).GroupContent[:len(groupContent)], groupContent)
 }

@@ -59,3 +59,8 @@ func DecryptWithAES(aesKey []byte, nonce []byte, ciphertext []byte) ([]byte, err
 	}
 	return plaintext, err
 }
+
+// 获得使用aes-256-gcm加密后的密文长度
+func GetCiphertextLength(plaintext []byte) int {
+	return len(plaintext) + 16
+}

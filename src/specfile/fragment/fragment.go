@@ -2,13 +2,14 @@ package fragment
 
 import (
 	"fmt"
-	"io/ioutil"
 	"math"
 	"sync"
+	"../../filetools"
 )
 
 type divideMethod uint8
 
+// 三种不同的分片策略
 const (
 	FRAGMNETS_2 divideMethod = 2
 	FRAGMNETS_4 divideMethod = 4
@@ -36,7 +37,7 @@ func setBit(data *byte, n uint8, flag uint8) {
 // 将一个文件分成多个无加密的fragment,并组成顺序的列表(注意还不是组)
 func GenerateDataFragmentList(filePath string, method divideMethod) ([][]byte, error) {
 	var err error
-	plaintext, err := ioutil.ReadFile(filePath)
+	plaintext, err := filetools.ReadFile(filePath)
 	if err != nil {
 		fmt.Println("无法读取待分片文件")
 		return nil, err
@@ -126,7 +127,7 @@ func RestoreByFragmentList(filePath string, fragmentList [][]byte) error {
 		panic("分片数量不合法")
 	}
 	// wg.Wait()
-	err = ioutil.WriteFile(filePath, plaintext, 0777)
+	err = filetools.WriteFile(filePath, plaintext, 0777)
 	return err
 }
 

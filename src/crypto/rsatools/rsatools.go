@@ -8,8 +8,8 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-	"io/ioutil"
 	"os"
+	"../../filetools"
 )
 
 var FilePermMode = os.FileMode(0777) // Default file permission
@@ -118,12 +118,12 @@ func GenerateKeyPairFiles(bits int, publicKeyFilePath string, privateKeyFilePath
 		fmt.Println("无法将私钥转为字节流", err)
 		return err
 	}
-	ioutil.WriteFile(publicKeyFilePath, publicKeyBytes, FilePermMode)
+	filetools.WriteFile(publicKeyFilePath, publicKeyBytes, FilePermMode)
 	if err != nil {
 		fmt.Println("无法将公钥写入文件", err)
 		return err
 	}
-	ioutil.WriteFile(privateKeyFilePath, privateKeyBytes, FilePermMode)
+	filetools.WriteFile(privateKeyFilePath, privateKeyBytes, FilePermMode)
 	if err != nil {
 		fmt.Println("无法将私钥写入文件", err)
 		fmt.Println(err)
@@ -135,7 +135,7 @@ func GenerateKeyPairFiles(bits int, publicKeyFilePath string, privateKeyFilePath
 // 读取公钥文件
 func ReadPublicKeyFile(publicKeyFilePath string) (*rsa.PublicKey, error) {
 	var pub *rsa.PublicKey = &rsa.PublicKey{}
-	publicKeyBytes, err := ioutil.ReadFile(publicKeyFilePath)
+	publicKeyBytes, err := filetools.ReadFile(publicKeyFilePath)
 	if err != nil {
 		fmt.Println("无法读取公钥文件", err)
 		return nil, err
@@ -151,7 +151,7 @@ func ReadPublicKeyFile(publicKeyFilePath string) (*rsa.PublicKey, error) {
 // 读取私钥文件
 func ReadPrivateKeyFile(privateKeyFilePath string) (*rsa.PrivateKey, error) {
 	var priv *rsa.PrivateKey = &rsa.PrivateKey{}
-	privateKeyBytes, err := ioutil.ReadFile(privateKeyFilePath)
+	privateKeyBytes, err := filetools.ReadFile(privateKeyFilePath)
 	if err != nil {
 		fmt.Println("无法读取私钥文件", err)
 		return nil, err
