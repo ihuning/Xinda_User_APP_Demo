@@ -2,6 +2,7 @@ package rsatools
 
 import (
 	"bytes"
+	"math"
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
@@ -236,4 +237,10 @@ func Verify(data []byte, sign []byte, pub *rsa.PublicKey) error {
 	}
 	hashed := h.Sum(nil)
 	return rsa.VerifyPKCS1v15(pub, crypto.SHA256, hashed, sign)
+}
+
+// 根据明文长度计算出密文长度
+func GetCiphertextLength(plaintextLength int) int {
+	var ciphertextLength = math.Ceil(float64(plaintextLength) / 117) * 128
+	return int(ciphertextLength)
 }

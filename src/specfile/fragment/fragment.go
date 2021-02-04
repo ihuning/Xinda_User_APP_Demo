@@ -7,13 +7,13 @@ import (
 	"../../filetools"
 )
 
-type divideMethod uint8
+type DivideMethod int
 
 // 三种不同的分片策略
 const (
-	FRAGMNETS_2 divideMethod = 2
-	FRAGMNETS_4 divideMethod = 4
-	FRAGMNETS_8 divideMethod = 8
+	FRAGMNETS_2 DivideMethod = 2
+	FRAGMNETS_4 DivideMethod = 4
+	FRAGMNETS_8 DivideMethod = 8
 )
 
 // 获得字节data的第n位
@@ -35,7 +35,7 @@ func setBit(data *byte, n uint8, flag uint8) {
 }
 
 // 将一个文件分成多个无加密的fragment,并组成顺序的列表(注意还不是组)
-func GenerateDataFragmentList(filePath string, method divideMethod) ([][]byte, error) {
+func GenerateDataFragmentList(filePath string, method DivideMethod) ([][]byte, error) {
 	var err error
 	plaintext, err := filetools.ReadFile(filePath)
 	if err != nil {
@@ -90,7 +90,7 @@ func GenerateDataFragmentList(filePath string, method divideMethod) ([][]byte, e
 func RestoreByFragmentList(filePath string, fragmentList [][]byte) error {
 	var err error
 	plaintext := make([]byte, len(fragmentList[0]))
-	var method divideMethod = divideMethod(len(fragmentList))
+	var method DivideMethod = DivideMethod(len(fragmentList))
 	combineToPlaintext := func(wg *sync.WaitGroup, position []uint8, fragment *[]byte) {
 		for j, fragmentByte := range *fragment {
 			for _, bit := range position {

@@ -8,7 +8,7 @@ import (
 	"io"
 )
 
-// 生成256位的AES key和12位的nonce
+// 生成256位的AES key和12字节的nonce
 func InitAES() ([]byte, []byte, error) {
 	aesKey := make([]byte, 256/8)
 	if _, err := io.ReadFull(rand.Reader, aesKey); err != nil {
@@ -61,6 +61,6 @@ func DecryptWithAES(aesKey []byte, nonce []byte, ciphertext []byte) ([]byte, err
 }
 
 // 获得使用aes-256-gcm加密后的密文长度
-func GetCiphertextLength(plaintext []byte) int {
-	return len(plaintext) + 16
+func GetCiphertextLength(plaintextLength int) int {
+	return plaintextLength + 16
 }
