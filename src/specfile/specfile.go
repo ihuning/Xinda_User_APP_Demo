@@ -3,18 +3,19 @@ package specfile
 import (
 	"bytes"
 	"fmt"
-	"path/filepath"
-	"sort"
 	"io/ioutil"
 	"os"
+	"path/filepath"
+	"sort"
 	"strconv"
+
+	"../crypto/aestools"
+	"../crypto/rsatools"
 	"../filetools"
 	"./fragment"
 	"./header"
-	redundance "./redudance"
 	"./padding"
-	"../crypto/aestools"
-	"../crypto/rsatools"
+	redundance "./redudance"
 )
 
 // 每个段的信息
@@ -36,118 +37,12 @@ type FileInfo struct {
 	FilePath                 string
 	UnencryptedFileStructure FileStructure
 	EncryptedFileStructure   FileStructure
-	// Sign          []byte
-	// SymmetricKey  []byte
-	Header header.Header
-	// Fragment      []byte
-	// padding      []byte
+	Header                   header.Header
 }
 
 type GroupInfo struct {
 	DataFileInfoList   []FileInfo
 	RedundanceFileInfo FileInfo
-}
-
-// 多个[]byte数组合并成一个[]byte
-func bytesCombine(pBytes ...[]byte) []byte {
-	len := len(pBytes)
-	var buffer bytes.Buffer
-	for i := 0; i < len; i++ {
-		buffer.Write(pBytes[i])
-	}
-	return buffer.Bytes()
-}
-
-// 生成签名
-func GenerateSign(data []byte, privateKeyFilePath string) ([]byte, error) {
-	var err error
-	privateKey, err := rsatools.ReadPrivateKeyFile(privateKeyFilePath)
-	if err != nil {
-		return nil, err
-	}
-	sign, err := rsatools.Sign(data, privateKey)
-	if err != nil {
-		return nil, err
-	}
-	return sign, err
-}
-
-func GenerateZipFile(text string, filePathList []string) (string, error) {
-	// 将文本和附件打包成一个zip文件,方便以后对它分片
-	return "", nil
-}
-
-func getSpecFilePathListFromFolder(folderDir string) ([]string, error) {
-	var err error
-	files, err := ioutil.ReadDir(folderDir) //读取目录下文件
-	if err != nil {
-		fmt.Println("无法获得数据交换文件的信息")
-		return nil, err
-	}
-	var filePathList []string
-	for _, file := range files {
-		if file.IsDir() || file.Name()[0] == '.' {
-			continue
-		}
-		filePath := filepath.Join(folderDir, file.Name())
-		filePathList = append(filePathList, filePath)
-	}
-	return filePathList, err
-}
-
-func restorelostDataFragment(groupSN_GroupInfoMap map[int]GroupInfo, fragmentSN_DataFileInfoMap *map[int]FileInfo) error {
-	var err error
-	for groupSN := range groupSN_GroupInfoMap {
-		groupInfo := groupSN_GroupInfoMap[groupSN]
-		expectedGroupTotal := len(groupInfo.RedundanceFileInfo.Header.GetGroupContent())
-		acturalGroupTotal := len(groupInfo.DataFileInfoList)
-		if expectedGroupTotal == acturalGroupTotal { // 数据分片已经收齐
-			continue
-		} else if expectedGroupTotal == acturalGroupTotal+1 { // 组里面只丢失了一个数据分片,用其他数据分片和冗余分片还原丢失数据分片
-			var lostDataFragmentSN int8 = -1
-			for _, fragmentSN := range groupInfo.RedundanceFileInfo.Header.GetGroupContent() {
-				for _, dataFileInfo := range groupInfo.DataFileInfoList {
-					if fragmentSN != dataFileInfo.Header.GetFragmentSN() {
-						lostDataFragmentSN = fragmentSN
-						break
-					}
-				}
-			}
-			var restoreGroup [][]byte
-			for _, fileInfo := range append(groupInfo.DataFileInfoList, groupInfo.RedundanceFileInfo) {
-				f, err := os.Open(fileInfo.FilePath)
-				if err != nil {
-					fmt.Println("无法打开数据交换文件", fileInfo.FilePath)
-					return err
-				}
-				fragmentBytes := make([]byte, fileInfo.UnencryptedFileStructure.FragmentStructure.length)
-				f.ReadAt(fragmentBytes, int64(fileInfo.UnencryptedFileStructure.FragmentStructure.Start)) // 将数据读取到fragmentBytes里面
-				f.Close()
-				restoreGroup = append(restoreGroup, fragmentBytes)
-			}
-			lostDataFragmentBytes := redundance.RestoreLostFragment(restoreGroup[:len(restoreGroup)-2], restoreGroup[len(restoreGroup)-1])
-			lostDataFragmentHeader := groupInfo.DataFileInfoList[0].Header
-			(&lostDataFragmentHeader).SetFragmentSN(lostDataFragmentSN)
-			lostDataFragmentHeaderBytes, err := lostDataFragmentHeader.HeaderToBytes()
-			dir, _ := filepath.Split(groupInfo.RedundanceFileInfo.FilePath)
-			fileName := strconv.Itoa(int(lostDataFragmentSN))
-			lostDataFilePath := filepath.Join(dir, fileName)
-			if err != nil {
-				return err
-			}
-			lostDataFileBytes := bytesCombine(lostDataFragmentHeaderBytes, lostDataFragmentBytes)
-			// 生成数据交换文件
-			filetools.WriteFile(lostDataFilePath, lostDataFileBytes, 0777)
-			lostDataFileStructure := groupInfo.RedundanceFileInfo.UnencryptedFileStructure
-			lostDataFileInfo := FileInfo{lostDataFilePath, lostDataFileStructure, lostDataFileStructure, lostDataFragmentHeader}
-			(*fragmentSN_DataFileInfoMap)[int(lostDataFragmentSN)] = lostDataFileInfo
-		} else { // 丢失了多个数据分片
-			fmt.Println("丢失了太多分片,无法还原")
-			err = fmt.Errorf("丢失了太多分片,无法还原")
-			return err
-		}
-	}
-	return err
 }
 
 func generateFileStructure(h header.Header) (unencryptedFileStructure FileStructure, encryptedFileStructure FileStructure) {
@@ -192,21 +87,174 @@ func generateFileStructure(h header.Header) (unencryptedFileStructure FileStruct
 	return
 }
 
-func generateSortedDataFileInfoList(filePathList []string) ([]FileInfo, error) {
+// 多个[]byte数组合并成一个[]byte
+func bytesCombine(pBytes ...[]byte) []byte {
+	len := len(pBytes)
+	var buffer bytes.Buffer
+	for i := 0; i < len; i++ {
+		buffer.Write(pBytes[i])
+	}
+	return buffer.Bytes()
+}
+
+func GenerateZipFile(text string, filePathList []string) (string, error) {
+	// 将文本和附件打包成一个zip文件,方便以后对它分片
+	return "", nil
+}
+
+func getSpecFilePathListFromFolder(folderDir string) ([]string, error) {
 	var err error
+	files, err := ioutil.ReadDir(folderDir) //读取目录下文件
+	if err != nil {
+		fmt.Println("无法获得数据交换文件的信息")
+		return nil, err
+	}
+	var filePathList []string
+	for _, file := range files {
+		if file.IsDir() || file.Name()[0] == '.' {
+			continue
+		}
+		filePath := filepath.Join(folderDir, file.Name())
+		filePathList = append(filePathList, filePath)
+	}
+	return filePathList, err
+}
+
+func generateFragmentSN_UnencryptedFragmentBytesMap(groupSN_GroupInfoMap map[int]GroupInfo, fragmentSN_DataFileInfoMap *map[int]FileInfo, senderPublicKeyFilePath string, receiverPrivateKeyFilePath string) (map[int][]byte, error) {
+	var err error
+	groupSN_UnencryptedFragmentBytesMap := make(map[int][]byte)
+	receiverPrivateKey, err := rsatools.ReadPrivateKeyFile(receiverPrivateKeyFilePath)
+	if err != nil {
+		return nil, err
+	}
+	for groupSN := range groupSN_GroupInfoMap {
+		groupInfo := groupSN_GroupInfoMap[groupSN]
+		acturalGroupTotal := len(groupInfo.DataFileInfoList)
+		expectedGroupTotal := len(groupInfo.DataFileInfoList[0].Header.GetGroupContent())
+		if expectedGroupTotal > acturalGroupTotal+1 { // 丢失了多个数据分片
+			fmt.Println("丢失了太多分片,无法还原")
+			err = fmt.Errorf("丢失了太多分片,无法还原")
+			return nil, err
+		} else if expectedGroupTotal == acturalGroupTotal+1 { // 组里面只丢失了一个数据分片
+			if (groupInfo.RedundanceFileInfo == FileInfo{}) {
+				fmt.Println("丢失了冗余分片,无法还原")
+				err = fmt.Errorf("丢失了冗余分片,无法还原")
+				return nil, err
+			} else if (groupInfo.RedundanceFileInfo != FileInfo{}) { // 冗余分片还在
+				// 找到是哪个分片丢了
+				var lostDataFragmentSN int = -1
+				expectedFragmentSNList := groupInfo.RedundanceFileInfo.Header.GetGroupContent()
+				var acturalFragmentSNList []int8
+				for _, dataFileInfo := range groupInfo.DataFileInfoList {
+					acturalFragmentSNList= append(acturalFragmentSNList, dataFileInfo.Header.GetFragmentSN())
+				}
+				for _, expectedFragmentSN := range expectedFragmentSNList {
+					flag := false
+					for _, acturalFragmentSN := range acturalFragmentSNList {
+						if expectedFragmentSN == acturalFragmentSN {
+							flag = true
+						}
+					}
+					if flag == false {
+						lostDataFragmentSN = int(expectedFragmentSN)
+					}
+				}
+				var restoreGroup [][]byte
+				for _, fileInfo := range append(groupInfo.DataFileInfoList, groupInfo.RedundanceFileInfo) {
+					f, err := os.Open(fileInfo.FilePath)
+					defer f.Close()
+					if err != nil {
+						fmt.Println("无法打开数据交换文件", fileInfo.FilePath)
+						return nil, err
+					}
+					encryptedAesKey := make([]byte, fileInfo.EncryptedFileStructure.SymmetricKey.length)
+					f.ReadAt(encryptedAesKey, int64(fileInfo.EncryptedFileStructure.SymmetricKey.Start))
+					aesKey, err := rsatools.DecryptWithPrivateKey(encryptedAesKey, receiverPrivateKey)
+					if err != nil {
+						return nil, err
+					}
+					encryptedNonce := make([]byte, fileInfo.EncryptedFileStructure.Nonce.length)
+					f.ReadAt(encryptedNonce, int64(fileInfo.EncryptedFileStructure.Nonce.Start))
+					nonce, err := rsatools.DecryptWithPrivateKey(encryptedNonce, receiverPrivateKey)
+					if err != nil {
+						return nil, err
+					}
+					encryptedFragmentBytes := make([]byte, fileInfo.EncryptedFileStructure.FragmentStructure.length)
+					f.ReadAt(encryptedFragmentBytes, int64(fileInfo.EncryptedFileStructure.FragmentStructure.Start))
+					unencryptedFragmentBytes, err := aestools.DecryptWithAES(aesKey, nonce, encryptedFragmentBytes)
+					if err != nil {
+						return nil, err
+					}
+					restoreGroup = append(restoreGroup, unencryptedFragmentBytes)
+					fragmentSN := int(fileInfo.Header.GetFragmentSN())
+					var isRedundant = bool(fragmentSN == -1)
+					if isRedundant == false {
+						groupSN_UnencryptedFragmentBytesMap[fragmentSN] = unencryptedFragmentBytes
+					}
+				}
+				lostDataFragmentBytes := redundance.RestoreLostFragment(restoreGroup[:len(restoreGroup)-2], restoreGroup[len(restoreGroup)-1])
+				groupSN_UnencryptedFragmentBytesMap[lostDataFragmentSN] = lostDataFragmentBytes
+			}
+		} else if expectedGroupTotal == acturalGroupTotal { // 数据分片已经收齐
+			for _, fileInfo := range groupInfo.DataFileInfoList {
+				f, err := os.Open(fileInfo.FilePath)
+				defer f.Close()
+				if err != nil {
+					fmt.Println("无法打开数据交换文件", fileInfo.FilePath)
+					return nil, err
+				}
+				encryptedAesKey := make([]byte, fileInfo.EncryptedFileStructure.SymmetricKey.length)
+				f.ReadAt(encryptedAesKey, int64(fileInfo.EncryptedFileStructure.SymmetricKey.Start))
+				aesKey, err := rsatools.DecryptWithPrivateKey(encryptedAesKey, receiverPrivateKey)
+				if err != nil {
+					return nil, err
+				}
+				encryptedNonce := make([]byte, fileInfo.EncryptedFileStructure.Nonce.length)
+				f.ReadAt(encryptedNonce, int64(fileInfo.EncryptedFileStructure.Nonce.Start))
+				nonce, err := rsatools.DecryptWithPrivateKey(encryptedNonce, receiverPrivateKey)
+				if err != nil {
+					return nil, err
+				}
+				encryptedFragmentBytes := make([]byte, fileInfo.EncryptedFileStructure.FragmentStructure.length)
+				f.ReadAt(encryptedFragmentBytes, int64(fileInfo.EncryptedFileStructure.FragmentStructure.Start))
+				unencryptedFragmentBytes, err := aestools.DecryptWithAES(aesKey, nonce, encryptedFragmentBytes)
+				if err != nil {
+					return nil, err
+				}
+				fragmentSN := int(fileInfo.Header.GetFragmentSN())
+				groupSN_UnencryptedFragmentBytesMap[fragmentSN] = unencryptedFragmentBytes
+			}
+		}
+	}
+	return groupSN_UnencryptedFragmentBytesMap, err
+}
+
+func generateSortedFragmentBytesList(filePathList []string, senderPublicKeyFilePath string, receiverPrivateKeyFilePath string) ([][]byte, error) {
+	var err error
+	receiverPrivateKey, err := rsatools.ReadPrivateKeyFile(receiverPrivateKeyFilePath)
+	if err != nil {
+		return nil, err
+	}
 	groupSN_GroupInfoMap := make(map[int]GroupInfo)
 	fragmentSN_DataFileInfoMap := make(map[int]FileInfo)
 	for _, filePath := range filePathList {
 		f, err := os.Open(filePath)
+		defer f.Close()
 		if err != nil {
 			fmt.Println("无法打开数据交换文件", filePath)
 			return nil, err
 		}
 		// 读取头部,并加入map中
-		headerBytes := make([]byte, header.GetHeaderBytesSize())
-		f.ReadAt(headerBytes, 0) // 将头部读取到headerBytes里面
-		f.Close()
-		header, err := header.ReadHeaderFromSpecFileBytes(headerBytes)
+		encryptedHeaderBytes := make([]byte, rsatools.GetCiphertextLength(header.GetHeaderBytesSize()))
+		f.ReadAt(encryptedHeaderBytes, 0) // 将头部读取到headerBytes里面
+		unencryptedHeaderBytes, err := rsatools.DecryptWithPrivateKey(encryptedHeaderBytes, receiverPrivateKey)
+		if err != nil {
+			return nil, err
+		}
+		header, err := header.ReadHeaderFromSpecFileBytes(unencryptedHeaderBytes)
+		if err != nil {
+			return nil, err
+		}
 		fragmentSN := int(header.GetFragmentSN())
 		groupSN := int(header.GetGroupSN())
 		unencryptedFileStructure, encryptedFileStructure := generateFileStructure(header)
@@ -218,27 +266,31 @@ func generateSortedDataFileInfoList(filePathList []string) ([]FileInfo, error) {
 			groupSN_GroupInfoMap[groupSN] = GroupInfo{groupSN_GroupInfoMap[groupSN].DataFileInfoList, fileInfo}
 		}
 	}
-	// 检查每个冗余分组是否收齐了所有的数据分片,并尝试对丢失的数据分片进行还原
-	restorelostDataFragment(groupSN_GroupInfoMap, &fragmentSN_DataFileInfoMap)
-	// 去除冗余分片
-	var fragmentSNList []int
-	for fragmentSN := range fragmentSN_DataFileInfoMap {
-		fragmentSNList = append(fragmentSNList, fragmentSN)
+	// 对丢失的数据分片进行还原,并读取所有的数据分片
+	fragmentSN_UnencryptedFragmentBytesMap, err := generateFragmentSN_UnencryptedFragmentBytesMap(groupSN_GroupInfoMap, &fragmentSN_DataFileInfoMap, senderPublicKeyFilePath, receiverPrivateKeyFilePath)
+	if err != nil {
+		return nil, err
 	}
 	// 给key排序，从小到大
-	sort.Sort(sort.IntSlice(fragmentSNList))
-	var sortedDataFileInfoList []FileInfo
-	for _, fragmentSN := range fragmentSNList {
-		sortedDataFileInfoList = append(sortedDataFileInfoList, fragmentSN_DataFileInfoMap[fragmentSN])
+	var fragmentSNList []int
+	for fragmentSN := range fragmentSN_UnencryptedFragmentBytesMap {
+		fragmentSNList = append(fragmentSNList, fragmentSN)
 	}
-	return sortedDataFileInfoList, err
+	sort.Sort(sort.IntSlice(fragmentSNList))
+	var sortedFragmentBytesList [][]byte
+	for _, fragmentSN := range fragmentSNList {
+		sortedFragmentBytesList = append(sortedFragmentBytesList, fragmentSN_UnencryptedFragmentBytesMap[fragmentSN])
+	}
+	return sortedFragmentBytesList, err
 }
 
-func GenerateSpecFileFolder(zipFilePath string, fragmentNum int, publicKeyFilePath string, privateKeyFilePath string, configFilePath string, folderDir string) error {
+func GenerateSpecFileFolder(zipFilePath string, fragmentNum int, receiverPublicKeyFilePath string, senderPrivateKeyFilePath string, configFilePath string, folderDir string) error {
 	dataFragmentList, err := fragment.GenerateDataFragmentList(zipFilePath, fragment.DivideMethod(fragmentNum))
 	if err != nil {
 		return err
 	}
+	receiverPublicKey, _ := rsatools.ReadPublicKeyFile(receiverPublicKeyFilePath)
+	senderPrivateKey, _ := rsatools.ReadPrivateKeyFile(senderPrivateKeyFilePath)
 	fragmentGroup := fragment.ListToGroup(dataFragmentList, 3)
 	// 为每一组生成冗余分片
 	for i := 0; i < len(fragmentGroup); i++ {
@@ -247,8 +299,6 @@ func GenerateSpecFileFolder(zipFilePath string, fragmentNum int, publicKeyFilePa
 			return err
 		}
 	}
-	// publicKey, _ := rsatools.ReadPublicKeyFile(publicKeyFilePath)
-	privateKey, _ := rsatools.ReadPrivateKeyFile(privateKeyFilePath)
 	// 为所有分片添加签名/对称密钥/头部/无意义填充,使之生成数据交换文件
 	for i := 0; i < len(fragmentGroup); i++ {
 		groupNum := len(fragmentGroup[i])
@@ -272,41 +322,49 @@ func GenerateSpecFileFolder(zipFilePath string, fragmentNum int, publicKeyFilePa
 			}
 			aesKey, nonce, err := aestools.InitAES()
 			padding := padding.GeneratePadding(len(fragmentGroup[i][j])/2, len(fragmentGroup[i][j])*2)
-			sign, err := rsatools.Sign(bytesCombine(headerBytes, aesKey, nonce, fragmentGroup[i][j], padding), privateKey)
+			sign, err := rsatools.Sign(bytesCombine(headerBytes, aesKey, nonce, fragmentGroup[i][j]), senderPrivateKey)
 			if err != nil {
 				return err
 			}
-			specFileBytes := bytesCombine(headerBytes, aesKey, nonce, fragmentGroup[i][j], sign, padding)
+			encryptedHeaderBytes, err := rsatools.EncryptWithPublicKey(headerBytes, receiverPublicKey)
+			if err != nil {
+				return err
+			}
+			encryptedAesKey, err := rsatools.EncryptWithPublicKey(aesKey, receiverPublicKey)
+			if err != nil {
+				return err
+			}
+			encryptedNonce, err := rsatools.EncryptWithPublicKey(nonce, receiverPublicKey)
+			if err != nil {
+				return err
+			}
+			encryptedFragmentBytes, err := aestools.EncryptWithAES(aesKey, nonce, fragmentGroup[i][j])
+			if err != nil {
+				return err
+			}
+			encryptedSign, err := rsatools.EncryptWithPublicKey(sign, receiverPublicKey)
+			if err != nil {
+				return err
+			}
+			encryptedSpecFileBytes := bytesCombine(encryptedHeaderBytes, encryptedAesKey, encryptedNonce, encryptedFragmentBytes, encryptedSign, padding)
 			// 生成数据交换文件
 			filePath := filepath.Join(folderDir, strconv.Itoa(i*len(fragmentGroup[0])+j))
-			filetools.WriteFile(filePath, specFileBytes, 0777)
+			filetools.WriteFile(filePath, encryptedSpecFileBytes, 0777)
 		}
 	}
 	return err
 }
 
-func RestoreFromSpecFileFolder(zipFilePath string, publicKeyFilePath string, privateKeyFilePath string, configFilePath string, folderDir string) error {
+func RestoreFromSpecFileFolder(zipFilePath string, senderPublicKeyFilePath string, receiverPrivateKeyFilePath string, configFilePath string, folderDir string) error {
 	var err error
 	filePathList, err := getSpecFilePathListFromFolder(folderDir)
 	if err != nil {
 		return err
 	}
-	sortedDataFileInfoList, err := generateSortedDataFileInfoList(filePathList)
+	sortedFragmentBytesList, err := generateSortedFragmentBytesList(filePathList, senderPublicKeyFilePath, receiverPrivateKeyFilePath)
 	if err != nil {
 		return err
 	}
-	var sortedFragmentList [][]byte
-	for _, dataFileInfo := range sortedDataFileInfoList {
-		f, err := os.Open(dataFileInfo.FilePath)
-		if err != nil {
-			fmt.Println("无法打开数据交换文件", dataFileInfo.FilePath)
-			return err
-		}
-		fragmentBytes := make([]byte, dataFileInfo.UnencryptedFileStructure.FragmentStructure.length)
-		f.ReadAt(fragmentBytes, int64(dataFileInfo.UnencryptedFileStructure.FragmentStructure.Start)) // 将数据读取到fragmentBytes里面
-		f.Close()
-		sortedFragmentList = append(sortedFragmentList, fragmentBytes)
-	}
-	err = fragment.RestoreByFragmentList(zipFilePath, sortedFragmentList)
+	err = fragment.RestoreByFragmentList(zipFilePath, sortedFragmentBytesList)
 	return err
 }
