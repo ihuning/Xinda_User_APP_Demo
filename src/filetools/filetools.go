@@ -27,6 +27,10 @@ func WriteFile(filePath string, data []byte, perm os.FileMode) error {
 		return err
 	}
 	err = ioutil.WriteFile(filePath, data, perm)
+	if err != nil {
+		fmt.Println("无法写入文件", dir)
+		return err
+	}
 	return err
 }
 
