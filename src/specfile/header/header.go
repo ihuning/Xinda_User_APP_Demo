@@ -16,26 +16,23 @@ type Header struct {
 	FileName           [255]byte // 待传输文件的文件名
 	FullDataLength     int32     // 待传输文件的长度
 	Identification     int32     // 标识.一个文件的所有分片有相同的标识
-	DivideMethod       int32     // 划分方式(2片?4片?8片?)
 	FragmentDataLength int32     // 加密后分片的数据部分长度
 	Timer              int32     // 分片的TTL
-	Nonce              int32     // 防止重放攻击的随机数
+	DivideMethod       int8      // 划分方式(2片?4片?8片?)
 	GroupSN            int8      // 冗余分组序列号
 	FragmentSN         int8      // 分片序号(如果是冗余分片,则序号为-1)
 	GroupContent       [8]int8   // 本冗余分组中所有数据分片的FragmentSN
 }
 
 // 生成一个Header
-func (h *Header) generateHeader(senderName, receiverName, fileName string, fullDataLength, identification, divideMethod, fragmentDataLength, timer, nonce int32, groupSN, fragmentSN int8, groupContent []int8) {
+func (h *Header) generateHeader(senderName, receiverName, fileName string, fullDataLength, identification, fragmentDataLength, timer int32, groupSN, fragmentSN int8, groupContent []int8) {
 	h.SetSenderName(senderName)
 	h.SetReceiverName(receiverName)
 	h.SetFileName(fileName)
 	h.SetFullDataLength(fullDataLength)
 	h.SetIdentification(identification)
 	h.SetFragmentDataLength(fragmentDataLength)
-	h.SetDivideMethod(divideMethod)
 	h.SetTimer(timer)
-	h.SetNonce(nonce)
 	h.SetGroupSN(groupSN)
 	h.SetFragmentSN(fragmentSN)
 	h.SetGroupContent(groupContent)
@@ -75,9 +72,9 @@ func (h *Header) BytesToHeader(readBytes []byte) error {
 }
 
 // 生成一个结构体,并将结构体转为对应的bytes
-func GenerateHeaderBytes(senderName, receiverName, fileName string, fullDataLength, identification, divideMethod, fragmentDataLength, timer, nonce int32, groupSN, fragmentSN int8, groupContent []int8) ([]byte, error) {
+func GenerateHeaderBytes(senderName, receiverName, fileName string, fullDataLength, identification, fragmentDataLength, timer int32, groupSN, fragmentSN int8, groupContent []int8) ([]byte, error) {
 	var header *Header = &Header{}
-	header.generateHeader(senderName, receiverName, fileName, fullDataLength, identification, divideMethod, fragmentDataLength, timer, nonce, groupSN, fragmentSN, groupContent)
+	header.generateHeader(senderName, receiverName, fileName, fullDataLength, identification, fragmentDataLength, timer, groupSN, fragmentSN, groupContent)
 	headerBytes, err := header.HeaderToBytes()
 	return headerBytes, err
 }
@@ -130,20 +127,12 @@ func (h Header) GetIdentification() int32 {
 	return h.Identification
 }
 
-func (h Header) GetDivideMethod() int32 {
-	return h.DivideMethod
-}
-
 func (h Header) GetFragmentDataLength() int32 {
 	return h.FragmentDataLength
 }
 
 func (h Header) GetTimer() int32 {
 	return h.Timer
-}
-
-func (h Header) GetNonce() int32 {
-	return h.Nonce
 }
 
 func (h Header) GetGroupSN() int8 {
@@ -192,16 +181,8 @@ func (h *Header) SetFragmentDataLength(fragmentDataLength int32) {
 	(*h).FragmentDataLength = fragmentDataLength
 }
 
-func (h *Header) SetDivideMethod(divideMethod int32) {
-	(*h).DivideMethod = divideMethod
-}
-
 func (h *Header) SetTimer(timer int32) {
 	(*h).Timer = timer
-}
-
-func (h *Header) SetNonce(nonce int32) {
-	(*h).Nonce = nonce
 }
 
 func (h *Header) SetGroupSN(groupSN int8) {
