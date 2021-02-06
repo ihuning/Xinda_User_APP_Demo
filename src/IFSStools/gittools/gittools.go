@@ -1,4 +1,4 @@
-package gittools
+package main
 
 import (
 	"fmt"
@@ -119,8 +119,8 @@ func PullFromRepository(directory, username, password string) error {
 	return nil
 }
 
-// func main() {
-// 	// CloneRepository("https://github.com/iLemonRain/test", "./test", "zc314401480@gmail.com", "zC950303")
-// 	// PushToRepository("./test", "iLemonRain", "zC950303")
-// 	PullFromRepository("./test", "iLemonRain", "zC950303")
-// }
+func main() {
+	// CloneRepository("https://github.com/iLemonRain/test", "./test", "zc314401480@gmail.com", "zC950303")
+	// PushToRepository("./test", "iLemonRain", "zC950303")
+	PullFromRepository("./test", "iLemonRain", "zC950303")
+}

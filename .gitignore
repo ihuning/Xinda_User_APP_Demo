@@ -143,6 +143,12 @@ cython_debug/
 # VS Code
 .vscode/*
 
-# 工程验证代码文件
+# 依赖的库
+*pkg
+
+# 生成的二进制文件
+*bin
+
+# 测试文件
 *test
 *?_test.go

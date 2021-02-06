@@ -4,8 +4,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"./gowebdav"
-	"./utils"
+	"xindauserbackground/src/IFSStools/jianguoyuntools/gowebdav"
+	"xindauserbackground/src/IFSStools/jianguoyuntools/utils"
 )
 
 var FilePermMode = os.FileMode(0777) // Default file permission

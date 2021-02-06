@@ -8,14 +8,13 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
-
-	"../crypto/aestools"
-	"../crypto/rsatools"
-	"../filetools"
-	"./fragment"
-	"./header"
-	"./padding"
-	redundance "./redudance"
+	"xindauserbackground/src/crypto/aestools"
+	"xindauserbackground/src/crypto/rsatools"
+	"xindauserbackground/src/filetools"
+	"xindauserbackground/src/specfile/fragment"
+	"xindauserbackground/src/specfile/header"
+	"xindauserbackground/src/specfile/padding"
+	redundance "xindauserbackground/src/specfile/redudance"
 )
 
 // 每个段的信息

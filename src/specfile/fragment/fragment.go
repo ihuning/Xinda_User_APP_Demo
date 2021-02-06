@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"math"
 	"sync"
-	"../../filetools"
+	"xindauserbackground/src/filetools"
 )
 
 type DivideMethod int
