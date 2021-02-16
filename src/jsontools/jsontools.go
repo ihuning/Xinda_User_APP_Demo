@@ -10,21 +10,21 @@ import (
 type JsonRoot struct {
 	SenderName   string     `json:"senderName"`
 	ReceiverName string     `json:"receiverName"`
-	PlatformList []Platform `json:"platformlist"`
+	IFSSInfoList []IFSSInfo `json:"IFSSInfolist"`
 	FileInfo     []FileInfo `json:"fileInfo"`
 }
 
-type Platform struct {
-	PlatformName string `json:"platformName"`
-	PlatformType string `json:"platformType"`
-	PlatformURL  string `json:"platformURL"`
+type IFSSInfo struct {
+	IFSSName string `json:"IFSSName"`
+	IFSSType string `json:"IFSSType"`
+	IFSSURL  string `json:"IFSSURL"`
 	UserName     string `json:"userName"`
 	UserPassword string `json:"userPassword"`
 }
 
 type FileInfo struct {
 	FileName     string `json:"fileName"`
-	PlatformType string `json:"platformType"`
+	IFSSType string `json:"IFSSType"`
 }
 
 // 读取Json文件,并存储在root结构体中
