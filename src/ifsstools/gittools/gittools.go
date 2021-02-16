@@ -5,9 +5,10 @@ import (
 	"io/ioutil"
 	"path/filepath"
 	"time"
-	git "gopkg.in/src-d/go-git.v4"
-	"gopkg.in/src-d/go-git.v4/plumbing/object"
-	"gopkg.in/src-d/go-git.v4/plumbing/transport/http"
+	git "github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/transport/http"
 )
 
 // 将仓库克隆到指定位置
@@ -119,8 +120,44 @@ func PullFromRepository(directory, username, password string) error {
 	return nil
 }
 
-func main() {
-	// CloneRepository("https://github.com/iLemonRain/test", "./test", "zc314401480@gmail.com", "zC950303")
-	// PushToRepository("./test", "iLemonRain", "zC950303")
-	PullFromRepository("./test", "iLemonRain", "zC950303")
+func ResetLastCommit(directory, username, password string) error {
+	var err error
+	r, err := git.PlainOpen(directory)
+	if err != nil {
+		return err
+	}
+	w, err := r.Worktree()
+	if err != nil {
+		return err
+	}
+	ref, err := r.Head()
+	if err != nil {
+		return err
+	}
+	// 获取所有历史上的commits
+	cIter, err := r.Log(&git.LogOptions{From: ref.Hash(), All:true})
+	if err != nil {
+		return err
+	}
+	var initialHash plumbing.Hash
+	err = cIter.ForEach(func(c *object.Commit) error {
+		initialHash = c.Hash
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	if err = w.Reset(&git.ResetOptions{
+		Mode:   git.HardReset,
+		Commit: initialHash,
+	}); err != nil {
+		return err
+	}
+	err = r.Push(&git.PushOptions{
+		Force: true,
+		Auth: &http.BasicAuth{
+			Username: username,
+			Password: password,
+		}})
+	return err
 }
