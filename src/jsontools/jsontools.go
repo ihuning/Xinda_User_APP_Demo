@@ -15,15 +15,15 @@ type JsonRoot struct {
 }
 
 type IFSSInfo struct {
-	IFSSName string `json:"IFSSName"`
-	IFSSType string `json:"IFSSType"`
-	IFSSURL  string `json:"IFSSURL"`
+	IFSSName     string `json:"IFSSName"`
+	IFSSType     string `json:"IFSSType"`
+	IFSSURL      string `json:"IFSSURL"`
 	UserName     string `json:"userName"`
 	UserPassword string `json:"userPassword"`
 }
 
 type FileInfo struct {
-	FileName     string `json:"fileName"`
+	FileName string `json:"fileName"`
 	IFSSType string `json:"IFSSType"`
 }
 
