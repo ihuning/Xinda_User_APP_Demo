@@ -47,7 +47,7 @@ func GenerateDataFragmentList(filePath string, method DivideMethod) ([][]byte, e
 		fragmentList = append(fragmentList, []byte{})
 	}
 	appendFragmentToList := func(wg *sync.WaitGroup, position []uint8, fragment *[]byte) {
-		for i, _ := range plaintext {
+		for i := range plaintext {
 			var fragmentByte byte
 			for _, bit := range position {
 				flag := getBit(plaintext[i], bit)

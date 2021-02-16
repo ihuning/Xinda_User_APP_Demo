@@ -14,7 +14,7 @@ import (
 	"xindauserbackground/src/specfile/fragment"
 	"xindauserbackground/src/specfile/header"
 	"xindauserbackground/src/specfile/padding"
-	redundance "xindauserbackground/src/specfile/redudance"
+	"xindauserbackground/src/specfile/redudance"
 )
 
 // 每个段的信息

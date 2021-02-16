@@ -4,8 +4,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"xindauserbackground/src/IFSStools/jianguoyuntools/gowebdav"
-	"xindauserbackground/src/IFSStools/jianguoyuntools/utils"
+	"xindauserbackground/src/platform/jianguoyuntools/gowebdav"
+	"xindauserbackground/src/platform/jianguoyuntools/utils"
 )
 
 var FilePermMode = os.FileMode(0777) // Default file permission
@@ -14,8 +14,8 @@ type JianGuoYun struct {
 	user     string
 	password string
 	url      string
-	path   string
-	client *gowebdav.Client
+	path     string
+	client   *gowebdav.Client
 }
 
 func NewJianGuoYunClient(url, user, password, path string) *JianGuoYun {
