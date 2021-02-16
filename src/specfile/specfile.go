@@ -100,7 +100,7 @@ func bytesCombine(pBytes ...[]byte) []byte {
 }
 
 // 根据分片group生成数据交换文件,并写入指定文件夹
-func writeSpecFileToFolder(fragmentGroup [][][]byte, zipFilePath string, receiverPublicKeyFilePath string, senderPrivateKeyFilePath string, configFilePath string, folderDir string) error {
+func generateSpecFileFolder(fragmentGroup [][][]byte, zipFilePath string, receiverPublicKeyFilePath string, senderPrivateKeyFilePath string, configFilePath string, folderDir string) error {
 	var err error
 	receiverPublicKey, _ := rsatools.ReadPublicKeyFile(receiverPublicKeyFilePath)
 	senderPrivateKey, _ := rsatools.ReadPrivateKeyFile(senderPrivateKeyFilePath)
@@ -374,7 +374,7 @@ func GenerateSpecFileFolder(zipFilePath string, divideMethod, groupNum int, rece
 		}
 	}
 	// 为所有分片添加签名/对称密钥/头部/无意义填充,使之生成数据交换文件,并写入文件夹
-	writeSpecFileToFolder(fragmentGroup, zipFilePath, receiverPublicKeyFilePath, senderPrivateKeyFilePath, configFilePath, folderDir)
+	err = generateSpecFileFolder(fragmentGroup, zipFilePath, receiverPublicKeyFilePath, senderPrivateKeyFilePath, configFilePath, folderDir)
 	return err
 }
 
