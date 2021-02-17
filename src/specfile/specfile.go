@@ -3,7 +3,6 @@ package specfile
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sort"
@@ -161,25 +160,6 @@ func generateSpecFileFolder(fragmentGroup [][][]byte, zipFilePath string, receiv
 		}
 	}
 	return err
-}
-
-// 从数据交换文件所在的目录中读取所有数据交换文件的文件名列表
-func generateSpecFilePathListFromFolder(folderDir string) ([]string, error) {
-	var err error
-	fileList, err := ioutil.ReadDir(folderDir) //读取目录下文件
-	if err != nil {
-		fmt.Println("无法读取数据交换文件所在的目录")
-		return nil, err
-	}
-	var filePathList []string
-	for _, file := range fileList {
-		if file.IsDir() || file.Name()[0] == '.' {
-			continue
-		}
-		filePath := filepath.Join(folderDir, file.Name())
-		filePathList = append(filePathList, filePath)
-	}
-	return filePathList, err
 }
 
 // 从加密过的文件中读取出未加密的fragment
@@ -381,7 +361,7 @@ func GenerateSpecFileFolder(zipFilePath string, divideMethod, groupNum int, rece
 // 从数据交换文件的文件夹中恢复出要传输的文件,并将文件存储在fileSaveDir中
 func RestoreFromSpecFileFolder(fileSaveDir string, senderPublicKeyFilePath string, receiverPrivateKeyFilePath string, configFilePath string, specFileFoldeDir string) error {
 	var err error
-	filePathList, err := generateSpecFilePathListFromFolder(specFileFoldeDir)
+	filePathList, err := filetools.GenerateFilePathListFromFolder(specFileFoldeDir)
 	if err != nil {
 		return err
 	}
