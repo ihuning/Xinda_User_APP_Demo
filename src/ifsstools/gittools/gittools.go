@@ -2,7 +2,6 @@ package gittools
 
 import (
 	"fmt"
-	"path/filepath"
 	"xindauserbackground/src/filetools"
 
 	git "github.com/go-git/go-git/v5"
@@ -45,13 +44,12 @@ func PushToRepository(repoDir, username, password string) error {
 	if err != nil {
 		return err
 	}
-	filePathList, err := filetools.GenerateFilePathListFromFolder(repoDir)
+	_, fileNameList, err := filetools.GenerateFilePathNameListFromFolder(repoDir)
 	if err != nil {
 		return err
 	}
-	for _, filePath := range filePathList {
+	for _, fileName := range fileNameList {
 		// 将文件存储到暂存区
-		_, fileName := filepath.Split(filePath)
 		_, err = w.Add(fileName)
 		if err != nil {
 			return err
