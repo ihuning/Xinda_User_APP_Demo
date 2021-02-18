@@ -21,10 +21,8 @@ func CloneRepository(url, repoDir, username, password string) error {
 		URL: url,
 	})
 	if err != nil {
-		// 远程仓库未初始化,应该创立之初就建立一个包含.gitignore的空仓库
-		if err.Error() == "remote repository is empty" {
-			return err
-		}
+		// 如果远程仓库未初始化,应该创立之初就建立一个包含.gitignore的空仓库
+		fmt.Println("无法克隆仓库")
 		return err
 	}
 	return err
@@ -32,6 +30,12 @@ func CloneRepository(url, repoDir, username, password string) error {
 
 // 将commit的内容push到在线仓库中
 func PushToRepository(repoDir, username, password string) error {
+	var err error
+	defer func() {
+		if err != nil {
+			fmt.Println("无法push到仓库", err)
+		}
+	}()
 	// commit过程
 	r, err := git.PlainOpen(repoDir)
 	if err != nil {
@@ -75,7 +79,7 @@ func PullFromRepository(repoDir, username, password string) error {
 	var err error
 	defer func() {
 		if err != nil {
-			fmt.Println("无法push到仓库", err)
+			fmt.Println("无法从仓库pull", err)
 		}
 	}()
 	// 打开本地仓库
@@ -98,6 +102,11 @@ func PullFromRepository(repoDir, username, password string) error {
 
 func CleanRepository(repoDir, username, password string) error {
 	var err error
+	defer func() {
+		if err != nil {
+			fmt.Println("无法clean仓库", err)
+		}
+	}()
 	r, err := git.PlainOpen(repoDir)
 	if err != nil {
 		return err
