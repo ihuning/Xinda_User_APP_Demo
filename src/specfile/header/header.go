@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	// "unsafe"
 )
 
 type Header struct {
