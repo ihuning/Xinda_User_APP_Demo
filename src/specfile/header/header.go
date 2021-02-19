@@ -8,8 +8,6 @@ import (
 	// "unsafe"
 )
 
-const HEADER_BYTES_LENGTH = 328
-
 type Header struct {
 	SenderName         [20]byte  // 发送者的代号
 	ReceiverName       [20]byte  // 接收者的代号
