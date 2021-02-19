@@ -361,7 +361,7 @@ func GenerateSpecFileFolder(zipFilePath string, divideMethod, groupNum int, rece
 // 从数据交换文件的文件夹中恢复出要传输的文件,并将文件存储在fileSaveDir中
 func RestoreFromSpecFileFolder(fileSaveDir string, senderPublicKeyFilePath string, receiverPrivateKeyFilePath string, configFilePath string, specFileFoldeDir string) error {
 	var err error
-	filePathList, _,  err := filetools.GenerateFilePathNameListFromFolder(specFileFoldeDir)
+	filePathList, _, err := filetools.GenerateSpecFilePathNameListFromFolder(specFileFoldeDir)
 	if err != nil {
 		return err
 	}

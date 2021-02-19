@@ -2,6 +2,7 @@ package gittools
 
 import (
 	"fmt"
+	"path/filepath"
 	"xindauserbackground/src/filetools"
 
 	git "github.com/go-git/go-git/v5"
@@ -10,19 +11,51 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/transport/http"
 )
 
+func TestGitConnection(url, username, password string) error {
+	var err error
+	defer func() {
+		if err != nil {
+			fmt.Println("git远程仓库连接测试失败", err)
+		}
+	}()
+	tempDir := "./.testGitConnection"
+	err = CloneRepository(url, tempDir, username, password)
+	err = filetools.Rmdir(tempDir)
+	return err
+}
+
 // 将仓库克隆到指定位置
 func CloneRepository(url, repoDir, username, password string) error {
-	_, err := git.PlainClone(repoDir, false, &git.CloneOptions{
-		Auth: &http.BasicAuth{
-			Username: username,
-			Password: password,
-		},
-		URL: url,
-	})
-	if err != nil {
-		// 如果远程仓库未初始化,应该创立之初就建立一个包含.gitignore的空仓库
-		fmt.Println("无法克隆仓库")
-		return err
+	var err error
+	defer func() {
+		if err != nil {
+			fmt.Println("git clone失败", err)
+		}
+	}()
+	// 如果repoDir已经存在,则需要保护之前的文件,方法为clone空仓库到临时位置,然后移动回来
+	isPathExists := filetools.IsPathExists(repoDir)
+	if isPathExists {
+		tempDir := filepath.Join(repoDir, ".temp")
+		_, err = git.PlainClone(tempDir, false, &git.CloneOptions{
+			Auth: &http.BasicAuth{
+				Username: username,
+				Password: password,
+			},
+			URL: url,
+		})
+		filePathList, fileNameList, _ := filetools.GenerateAllFilePathNameListFromFolder(tempDir)
+		for i := 0; i < len(filePathList); i++ {
+			err = filetools.Rename(filePathList[i], filepath.Join(repoDir, fileNameList[i]))
+		}
+		err = filetools.Rmdir(tempDir)
+	} else {
+		_, err = git.PlainClone(repoDir, false, &git.CloneOptions{
+			Auth: &http.BasicAuth{
+				Username: username,
+				Password: password,
+			},
+			URL: url,
+		})
 	}
 	return err
 }
@@ -44,7 +77,7 @@ func PushToRepository(repoDir, username, password string) error {
 	if err != nil {
 		return err
 	}
-	_, fileNameList, err := filetools.GenerateFilePathNameListFromFolder(repoDir)
+	_, fileNameList, err := filetools.GenerateSpecFilePathNameListFromFolder(repoDir)
 	if err != nil {
 		return err
 	}

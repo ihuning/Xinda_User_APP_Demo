@@ -129,7 +129,7 @@ func TestJianGuoYunConnection(url, username, password string) error {
 // 上传一个文件夹中的所有数据交换文件
 func UploadAllFilesFromFolder(url, folderDir, username, password string) error {
 	var err error
-	filePathList, fileNameList, err := filetools.GenerateFilePathNameListFromFolder(folderDir)
+	filePathList, fileNameList, err := filetools.GenerateSpecFilePathNameListFromFolder(folderDir)
 	if err != nil {
 		return err
 	}
