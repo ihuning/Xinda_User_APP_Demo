@@ -6,24 +6,16 @@ import (
 	"xindauserbackground/src/ifsstools/jianguoyuntools"
 )
 
-type IFSSType int
-
-// 不同的IFSS通道
-const (
-	jianguoyun IFSSType = 0
-	git        IFSSType = 1
-)
-
 // 初始化IFSS连接,指定通信用到的文件夹(在通信开始前,IFSS应该被clean过)
-func TestIFSSConnection(ifssType IFSSType, url, username, password string) error {
+func TestIFSSConnection(ifssType, url, username, password string) error {
 	var err error
 	switch ifssType {
-	case git:
+	case "git":
 		err = gittools.TestGitConnection(url, username, password)
 		if err != nil {
 			return err
 		}
-	case jianguoyun:
+	case "jianguoyun":
 		err = jianguoyuntools.TestJianGuoYunConnection(url, username, password)
 		if err != nil {
 			return err
@@ -35,10 +27,10 @@ func TestIFSSConnection(ifssType IFSSType, url, username, password string) error
 }
 
 // 上传文件夹中的数据交换文件到IFSS
-func UploadToIFSS(ifssType IFSSType, url, folderDir, username, password string) error {
+func UploadToIFSS(ifssType, url, folderDir, username, password string) error {
 	var err error
 	switch ifssType {
-	case git:
+	case "git":
 		err = gittools.CloneRepository(url, folderDir, username, password)
 		if err != nil {
 			return err
@@ -47,7 +39,7 @@ func UploadToIFSS(ifssType IFSSType, url, folderDir, username, password string) 
 		if err != nil {
 			return err
 		}
-	case jianguoyun:
+	case "jianguoyun":
 		err = jianguoyuntools.UploadAllFilesFromFolder(url, folderDir, username, password)
 		if err != nil {
 			return err
@@ -60,15 +52,15 @@ func UploadToIFSS(ifssType IFSSType, url, folderDir, username, password string) 
 }
 
 // 从IFSS下载数据交换文件到文件夹中
-func DownloadFromIFSS(ifssType IFSSType, url, folderDir, username, password string) error {
+func DownloadFromIFSS(ifssType, url, folderDir, username, password string) error {
 	var err error
 	switch ifssType {
-	case git:
+	case "git":
 		err = gittools.CloneRepository(url, folderDir, username, password)
 		if err != nil {
 			return err
 		}
-	case jianguoyun:
+	case "jianguoyun":
 		err = jianguoyuntools.DownloadAllFilesToFolder(url, folderDir, username, password)
 		if err != nil {
 			return err
@@ -80,15 +72,15 @@ func DownloadFromIFSS(ifssType IFSSType, url, folderDir, username, password stri
 }
 
 // 在通信完成时,删除IFSS和本地目录中的所有的数据交换文件,以销毁通信记录
-func CleanIFSS(ifssType IFSSType, url, folderDir, username, password string) error {
+func CleanIFSS(ifssType, url, folderDir, username, password string) error {
 	var err error
 	switch ifssType {
-	case git:
+	case "git":
 		err = gittools.CleanRepository(folderDir, username, password)
 		if err != nil {
 			return err
 		}
-	case jianguoyun:
+	case "jianguoyun":
 		err = jianguoyuntools.CleanJianguoyun(url, username, password)
 		if err != nil {
 			return err
