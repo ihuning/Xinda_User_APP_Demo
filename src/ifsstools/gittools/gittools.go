@@ -43,10 +43,7 @@ func CloneRepository(url, repoDir, username, password string) error {
 			},
 			URL: url,
 		})
-		filePathList, fileNameList, _ := filetools.GenerateAllFilePathNameListFromFolder(tempDir)
-		for i := 0; i < len(filePathList); i++ {
-			err = filetools.Rename(filePathList[i], filepath.Join(repoDir, fileNameList[i]))
-		}
+		err = filetools.MoveAllFilesToNewFolder(tempDir, repoDir)
 		err = filetools.Rmdir(tempDir)
 	} else {
 		_, err = git.PlainClone(repoDir, false, &git.CloneOptions{

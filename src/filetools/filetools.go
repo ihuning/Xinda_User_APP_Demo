@@ -8,7 +8,7 @@ import (
 )
 
 // 如果文件夹不存在,就生成一个文件夹
-func createDirIfNotExist(dir string) error {
+func createFolderIfNotExist(dir string) error {
 	var err error
 	if _, err = os.Stat(dir); os.IsNotExist(err) {
 		err = os.MkdirAll(dir, 0755)
@@ -24,7 +24,7 @@ func createDirIfNotExist(dir string) error {
 func WriteFile(filePath string, data []byte, perm os.FileMode) error {
 	var err error
 	dir, _ := filepath.Split(filePath)
-	err = createDirIfNotExist(dir)
+	err = createFolderIfNotExist(dir)
 	if err != nil {
 		return err
 	}
@@ -38,12 +38,59 @@ func WriteFile(filePath string, data []byte, perm os.FileMode) error {
 
 // 读文件
 func ReadFile(filePath string) ([]byte, error) {
-	return ioutil.ReadFile(filePath)
+	bytes, err := ioutil.ReadFile(filePath)
+	if err != nil {
+		fmt.Println("无法读取文件", err)
+		return nil, err
+	}
+	return bytes, err
 }
 
-// 移动文件
+// 移动或重命名文件
 func Rename(oldPath, newPath string) error {
-	return os.Rename(oldPath, newPath)
+	err := os.Rename(oldPath, newPath)
+	if err != nil {
+		fmt.Println("无法移动或重命名文件", err)
+		return err
+	}
+	return err
+}
+
+// 把列表中的文件移动到新的文件夹
+func MoveFilesToNewFolder(filePathList []string, newDir string) error {
+	var err error
+	err = Mkdir(newDir)
+	if err != nil {
+		return err
+	}
+	for _, filePath := range filePathList {
+		_, fileName := filepath.Split(filePath)
+		err = Rename(filePath, filepath.Join(newDir, fileName))
+		if err != nil {
+			return err
+		}
+	}
+	return err
+}
+
+// 移动一个文件夹中的所有文件到新的文件夹
+func MoveAllFilesToNewFolder(oldDir, newDir string) error {
+	var err error
+	err = Mkdir(newDir)
+	if err != nil {
+		return err
+	}
+	filePathList, fileNameList, err := GenerateAllFilePathNameListFromFolder(oldDir)
+	if err != nil {
+		return err
+	}
+	for i := 0; i < len(filePathList); i++ {
+		err = Rename(filePathList[i], filepath.Join(newDir, fileNameList[i]))
+		if err != nil {
+			return err
+		}
+	}
+	return err
 }
 
 // 判断路径是否存在
@@ -60,9 +107,6 @@ func IsPathExists(path string) bool {
 func Mkdir(folderDir string) error {
 	var err error
 	isFolderExist := IsPathExists(folderDir)
-	if err != nil {
-		return err
-	}
 	if isFolderExist == false {
 		err := os.Mkdir(folderDir, 0755)
 		if err != nil {

@@ -324,6 +324,10 @@ func generateSortedFragmentBytesList(fileSaveDir string, filePathList []string, 
 	}
 	// 获得原始传输文件的文件名,并生成文件存储路径
 	fileName := groupSN_GroupInfoMap[0].DataFileInfoList[0].Header.GetFileName()
+	err = filetools.Mkdir(fileSaveDir)
+	if err != nil {
+		return nil, "", err
+	}
 	fileSavePath := filepath.Join(fileSaveDir, fileName)
 	// 给fragmentSN排序，从小到大
 	var fragmentSNList []int
