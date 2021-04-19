@@ -26,7 +26,7 @@ func NewJianGuoYunClient(url, user, password string) *JianGuoYun {
 		url:      url,
 		user:     user,
 		password: password,
-		path:     "/我的坚果云",
+		path:     "/我的坚果云/",
 		client:   client,
 	}
 	return j
