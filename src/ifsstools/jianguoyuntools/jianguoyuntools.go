@@ -26,7 +26,7 @@ func NewJianGuoYunClient(url, user, password string) *JianGuoYun {
 		url:      url,
 		user:     user,
 		password: password,
-		path:     "/",
+		path:     "/我的坚果云",
 		client:   client,
 	}
 	return j
@@ -37,6 +37,7 @@ func (j JianGuoYun) list(fileList *[]*utils.FileStat, path string) {
 	files, _ := j.client.ReadDir(path)
 	for _, file := range files {
 		filePath := filepath.Join(path, file.Name())
+		filePath = filepath.ToSlash(filePath) // 防止windows强制转换斜杠的格式
 		if path == filePath {
 			continue
 		}
@@ -102,7 +103,7 @@ func (j JianGuoYun) UploadFile(jgyPath, localPath string) error {
 		return err
 	}
 	defer file.Close()
-	j.client.WriteStream(jgyPath, file, 0644)
+	j.client.WriteStream(jgyPath, file, 0755)
 	// 检查文件是否上传成功
 	_, err = j.client.Read(jgyPath)
 	if err != nil {
@@ -135,7 +136,8 @@ func UploadAllFilesFromFolder(url, folderDir, username, password string) error {
 	}
 	j := NewJianGuoYunClient(url, username, password)
 	for i := 0; i < len(filePathList); i++ {
-		jgyPath := filepath.Join("/我的坚果云/", fileNameList[i])
+		jgyPath := filepath.Join(j.path, fileNameList[i])
+		jgyPath = filepath.ToSlash(jgyPath) // 防止windows强制转换斜杠的格式
 		localPath := filePathList[i]
 		err = j.UploadFile(jgyPath, localPath)
 		if err != nil {
@@ -150,7 +152,7 @@ func DownloadAllFilesToFolder(url, folderDir, username, password string) error {
 	var err error
 	var jgyFileStatList = make([]*utils.FileStat, 0)
 	j := NewJianGuoYunClient(url, username, password)
-	j.list(&jgyFileStatList, "/我的坚果云/")
+	j.list(&jgyFileStatList, j.path)
 	for _, jgyFileStat := range jgyFileStatList {
 		jgyFilePath := jgyFileStat.Path
 		_, jgyFileName := filepath.Split(jgyFilePath)
@@ -168,7 +170,7 @@ func CleanJianguoyun(url, username, password string) error {
 	var err error
 	var jgyFileStatList = make([]*utils.FileStat, 0)
 	j := NewJianGuoYunClient(url, username, password)
-	j.list(&jgyFileStatList, "/我的坚果云/")
+	j.list(&jgyFileStatList, j.path)
 	for _, jgyFileStat := range jgyFileStatList {
 		jgyFilePath := jgyFileStat.Path
 		err = j.client.Remove(jgyFilePath)
