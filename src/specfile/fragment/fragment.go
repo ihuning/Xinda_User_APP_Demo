@@ -60,16 +60,17 @@ func GenerateDataFragmentList(filePath string, method DivideMethod) ([][]byte, e
 	var wg sync.WaitGroup // 信号量
 	switch method {
 	case FRAGMNETS_2:
+		wg.Add(2)
 		go appendFragmentToList(&wg, []uint8{1, 3, 5, 7}, &fragmentList[0])
 		go appendFragmentToList(&wg, []uint8{0, 2, 4, 6}, &fragmentList[1])
-		wg.Add(2)
 	case FRAGMNETS_4:
+		wg.Add(4)
 		go appendFragmentToList(&wg, []uint8{3, 7}, &fragmentList[0])
 		go appendFragmentToList(&wg, []uint8{2, 6}, &fragmentList[1])
 		go appendFragmentToList(&wg, []uint8{1, 5}, &fragmentList[2])
 		go appendFragmentToList(&wg, []uint8{0, 4}, &fragmentList[3])
-		wg.Add(4)
 	case FRAGMNETS_8:
+		wg.Add(8)
 		go appendFragmentToList(&wg, []uint8{7}, &fragmentList[0])
 		go appendFragmentToList(&wg, []uint8{6}, &fragmentList[1])
 		go appendFragmentToList(&wg, []uint8{5}, &fragmentList[2])
@@ -78,7 +79,6 @@ func GenerateDataFragmentList(filePath string, method DivideMethod) ([][]byte, e
 		go appendFragmentToList(&wg, []uint8{2}, &fragmentList[5])
 		go appendFragmentToList(&wg, []uint8{1}, &fragmentList[6])
 		go appendFragmentToList(&wg, []uint8{0}, &fragmentList[7])
-		wg.Add(8)
 	default:
 		panic("分片数量不合法")
 	}

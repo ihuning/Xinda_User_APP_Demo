@@ -2,18 +2,29 @@ package rsatools
 
 import (
 	"bytes"
-	"math"
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
+	"math"
 	"os"
+	"unsafe"
 	"xindauserbackground/src/filetools"
 )
 
 var FilePermMode = os.FileMode(0777) // Default file permission
+
+func str2bytes(s string) []byte {
+	x := (*[2]uintptr)(unsafe.Pointer(&s))
+	h := [3]uintptr{x[0], x[1], x[1]}
+	return *(*[]byte)(unsafe.Pointer(&h))
+}
+
+func bytes2str(b []byte) string {
+	return *(*string)(unsafe.Pointer(&b))
+}
 
 // 生成RSA密钥对
 func GenerateKeyPair(bits int) (*rsa.PublicKey, *rsa.PrivateKey, error) {
@@ -26,7 +37,7 @@ func GenerateKeyPair(bits int) (*rsa.PublicKey, *rsa.PrivateKey, error) {
 	return &priv.PublicKey, priv, err
 }
 
-// 将生成的私钥转为bytes
+// 将私钥结构体转为bytes
 func privateKeyToBytes(priv *rsa.PrivateKey) ([]byte, error) {
 	privBytes := pem.EncodeToMemory(
 		&pem.Block{
@@ -37,7 +48,7 @@ func privateKeyToBytes(priv *rsa.PrivateKey) ([]byte, error) {
 	return privBytes, nil
 }
 
-// 将生成的公钥转为bytes
+// 将公钥结构体转为bytes
 func publicKeyToBytes(pub *rsa.PublicKey) ([]byte, error) {
 	pubASN1, err := x509.MarshalPKIXPublicKey(pub)
 	if err != nil {
@@ -49,6 +60,12 @@ func publicKeyToBytes(pub *rsa.PublicKey) ([]byte, error) {
 		Bytes: pubASN1,
 	})
 	return pubBytes, err
+}
+
+// 将公钥结构体转为string
+func PublicKeyToString(pub *rsa.PublicKey) (string, error) {
+	pubBytes, err := publicKeyToBytes(pub)
+	return bytes2str(pubBytes), err
 }
 
 // 将bytes转为私钥
@@ -97,6 +114,11 @@ func bytesToPublicKey(pub []byte) (*rsa.PublicKey, error) {
 		fmt.Println("not ok")
 	}
 	return key, nil
+}
+
+// 将string转为公钥
+func StringToPublicKey(str string) (*rsa.PublicKey, error) {
+	return bytesToPublicKey(str2bytes(str))
 }
 
 // 生成密钥对文件
@@ -174,7 +196,7 @@ func split(buf []byte, lim int) [][]byte {
 		chunks = append(chunks, chunk)
 	}
 	if len(buf) > 0 {
-		chunks = append(chunks, buf[:len(buf)])
+		chunks = append(chunks, buf)
 	}
 	return chunks
 }
@@ -241,6 +263,6 @@ func Verify(data []byte, sign []byte, pub *rsa.PublicKey) error {
 
 // 根据明文长度计算出密文长度
 func GetCiphertextLength(plaintextLength int) int {
-	var ciphertextLength = math.Ceil(float64(plaintextLength) / 117) * 128
+	var ciphertextLength = math.Ceil(float64(plaintextLength)/117) * 128
 	return int(ciphertextLength)
 }

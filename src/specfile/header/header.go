@@ -10,11 +10,11 @@ import (
 type Header struct {
 	SenderName         [20]byte  // 发送者的代号
 	ReceiverName       [20]byte  // 接收者的代号
-	FileName           [255]byte // 待传输文件的文件名
-	FullDataLength     int32     // 待传输文件的长度
-	Identification     int32     // 标识.一个文件的所有分片有相同的标识
-	FragmentDataLength int32     // 加密后分片的数据部分长度
-	Timer              int32     // 分片的TTL
+	FileName           [255]byte // 待发送的原文件（不是数据交换文件）的文件名
+	FullDataLength     int32     // 数据部分的长度（没用，因为等于FragmentDataLength）
+	Identification     int32     // 标识.一个文件的所有分片有相同的标识（暂时没用上）
+	FragmentDataLength int32     // 对称加密之前数据交换文件的数据部分长度(加密后会多16字节)
+	Timer              int32     // 发送方能接受的最长等待时间
 	DivideMethod       int8      // 划分方式(2片?4片?8片?)
 	GroupSN            int8      // 冗余分组序列号
 	FragmentSN         int8      // 分片序号(如果是冗余分片,则序号为-1)
