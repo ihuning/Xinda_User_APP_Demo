@@ -120,7 +120,7 @@ func generateSpecFileFolder(fragmentGroup [][][]byte, zipFilePath string, receiv
 			} else {
 				fragmentSN = int8(i*len(fragmentGroup[0]) + j)
 			}
-			headerBytes, err := header.GenerateHeaderBytes("lemon", "cherry", fileName, 999, 999, fragmentDataLength, 999, groupSN, fragmentSN, groupContent) // 999的都是预留的字段
+			headerBytes, err := header.GenerateHeaderBytes("lemon", "cherry", fileName, 999, fragmentDataLength, 999, groupSN, fragmentSN, groupContent) // 999的都是预留的字段
 			if err != nil {
 				return err
 			}

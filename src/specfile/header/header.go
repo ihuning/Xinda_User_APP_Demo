@@ -11,7 +11,6 @@ type Header struct {
 	SenderName         [20]byte  // 发送者的代号
 	ReceiverName       [20]byte  // 接收者的代号
 	FileName           [255]byte // 待发送的原文件（不是数据交换文件）的文件名
-	FullDataLength     int32     // 数据部分的长度（没用，因为等于FragmentDataLength）
 	Identification     int32     // 标识.一个文件的所有分片有相同的标识（暂时没用上）
 	FragmentDataLength int32     // 对称加密之前数据交换文件的数据部分长度(加密后会多16字节)
 	Timer              int32     // 发送方能接受的最长等待时间
@@ -22,11 +21,10 @@ type Header struct {
 }
 
 // 生成一个Header
-func (h *Header) generateHeader(senderName, receiverName, fileName string, fullDataLength, identification, fragmentDataLength, timer int32, groupSN, fragmentSN int8, groupContent []int8) {
+func (h *Header) generateHeader(senderName, receiverName, fileName string, identification, fragmentDataLength, timer int32, groupSN, fragmentSN int8, groupContent []int8) {
 	h.SetSenderName(senderName)
 	h.SetReceiverName(receiverName)
 	h.SetFileName(fileName)
-	h.SetFullDataLength(fullDataLength)
 	h.SetIdentification(identification)
 	h.SetFragmentDataLength(fragmentDataLength)
 	h.SetTimer(timer)
@@ -69,9 +67,9 @@ func (h *Header) BytesToHeader(readBytes []byte) error {
 }
 
 // 生成一个结构体,并将结构体转为对应的bytes
-func GenerateHeaderBytes(senderName, receiverName, fileName string, fullDataLength, identification, fragmentDataLength, timer int32, groupSN, fragmentSN int8, groupContent []int8) ([]byte, error) {
+func GenerateHeaderBytes(senderName, receiverName, fileName string, identification, fragmentDataLength, timer int32, groupSN, fragmentSN int8, groupContent []int8) ([]byte, error) {
 	var header *Header = &Header{}
-	header.generateHeader(senderName, receiverName, fileName, fullDataLength, identification, fragmentDataLength, timer, groupSN, fragmentSN, groupContent)
+	header.generateHeader(senderName, receiverName, fileName, identification, fragmentDataLength, timer, groupSN, fragmentSN, groupContent)
 	headerBytes, err := header.HeaderToBytes()
 	return headerBytes, err
 }
@@ -116,9 +114,6 @@ func (h Header) GetFileName() string {
 	return string(fileNameBytes)
 }
 
-func (h Header) GetFullDataLength() int32 {
-	return h.FullDataLength
-}
 
 func (h Header) GetIdentification() int32 {
 	return h.Identification
@@ -164,10 +159,6 @@ func (h *Header) SetReceiverName(receiverName string) {
 func (h *Header) SetFileName(fileName string) {
 	fileNameBytes := []byte(fileName)
 	copy((*h).FileName[:len(fileNameBytes)], fileNameBytes)
-}
-
-func (h *Header) SetFullDataLength(fullDataLength int32) {
-	(*h).FullDataLength = fullDataLength
 }
 
 func (h *Header) SetIdentification(identification int32) {
