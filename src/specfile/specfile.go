@@ -6,10 +6,10 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"xindauserbackground/src/crypto/aestools"
 	"xindauserbackground/src/crypto/rsatools"
 	"xindauserbackground/src/filetools"
+	"xindauserbackground/src/jsontools"
 	"xindauserbackground/src/specfile/fragment"
 	"xindauserbackground/src/specfile/header"
 	"xindauserbackground/src/specfile/padding"
@@ -99,33 +99,53 @@ func bytesCombine(pBytes ...[]byte) []byte {
 }
 
 // 根据分片group生成数据交换文件,并写入指定文件夹
-func generateSpecFileFolder(fragmentGroup [][][]byte, zipFilePath string, receiverPublicKeyFilePath string, senderPrivateKeyFilePath string, configFilePath string, folderDir string) error {
+func generateSpecFileFolder(fragmentGroup [][][]byte, zipFilePath string, senderPrivateKeyFilePath string, configFilePath string, folderDir string) error {
 	var err error
-	receiverPublicKey, _ := rsatools.ReadPublicKeyFile(receiverPublicKeyFilePath)
-	senderPrivateKey, _ := rsatools.ReadPrivateKeyFile(senderPrivateKeyFilePath)
+	// 获得私钥
+	senderPrivateKey, err := rsatools.ReadPrivateKeyFile(senderPrivateKeyFilePath)
+	if err != nil {
+		return err
+	}
+	jsonParser, err := jsontools.ReadJsonFile(configFilePath)
+	if err != nil {
+		return err
+	}
+	// 获得公钥
+	receiverPublicKeyString := jsontools.ReadJsonValue(jsonParser, "/ReceiverPublicKey")
+	receiverPublicKey, err := rsatools.StringToPublicKey(receiverPublicKeyString.(string))
+	if err != nil {
+		return err
+	}
+	// 从json中获得共有的信息
+	senderName := jsontools.ReadJsonValue(jsonParser, "/SenderName").(string)
+	receiverName := jsontools.ReadJsonValue(jsonParser, "/ReceiverName").(string)
+	fileName := jsontools.ReadJsonValue(jsonParser, "/FileName").(string)
+	identification := int32(jsontools.ReadJsonValue(jsonParser, "/Identification").(float64))
+	fragmentDataLength := int32(jsontools.ReadJsonValue(jsonParser, "/FragmentDataLength").(float64))
+	timer := int32(jsontools.ReadJsonValue(jsonParser, "/Timer").(float64))
+	// groupNum := len(jsontools.ReadJsonValue(jsonParser, "/GroupInfolist").([]interface{}))
 	for i := 0; i < len(fragmentGroup); i++ {
-		groupNum := len(fragmentGroup[i])
-		for j := 0; j < groupNum; j++ {
-			_, fileName := filepath.Split(zipFilePath)
+		fragmentNumInGroup := len(fragmentGroup[i])
+		for j := 0; j < fragmentNumInGroup; j++ {
 			var groupSN = int8(i)
 			var groupContent []int8
-			for k := 0; k < groupNum-1; k++ {
+			for k := 0; k < fragmentNumInGroup-1; k++ {
 				groupContent = append(groupContent, int8(i*len(fragmentGroup[0])+k))
 			}
-			var fragmentDataLength = int32(len(fragmentGroup[i][j]))
-			var isRedundant = bool(j+1 == groupNum) // 如果是组中最后一个分片,那就是冗余分片
+			var isRedundant = bool(j+1 == fragmentNumInGroup) // 如果是组中最后一个分片,那就是冗余分片
 			var fragmentSN int8
 			if isRedundant {
 				fragmentSN = -1
 			} else {
 				fragmentSN = int8(i*len(fragmentGroup[0]) + j)
 			}
-			headerBytes, err := header.GenerateHeaderBytes("lemon", "cherry", fileName, 999, fragmentDataLength, 999, groupSN, fragmentSN, groupContent) // 999的都是预留的字段
+			headerBytes, err := header.GenerateHeaderBytes(senderName, receiverName, fileName, identification, fragmentDataLength, timer, groupSN, fragmentSN, groupContent) // 999的都是预留的字段
 			if err != nil {
 				return err
 			}
 			aesKey, nonce, err := aestools.InitAES()
-			padding := padding.GeneratePadding(len(fragmentGroup[i][j])/2, len(fragmentGroup[i][j])*2)
+			paddingSize := int(jsontools.ReadJsonValue(jsonParser, "/GroupInfolist/" + fmt.Sprint(i) + "/SpecFileInfoList/" + fmt.Sprint(j) + "/PaddingSize").(float64))
+			padding := padding.GeneratePadding(paddingSize)
 			sign, err := rsatools.Sign(bytesCombine(headerBytes, aesKey, nonce, fragmentGroup[i][j]), senderPrivateKey)
 			if err != nil {
 				return err
@@ -152,8 +172,9 @@ func generateSpecFileFolder(fragmentGroup [][][]byte, zipFilePath string, receiv
 			}
 			specFileBytes := bytesCombine(encryptedHeaderBytes, encryptedAesKey, encryptedNonce, encryptedFragmentBytes, encryptedSign, padding)
 			// 把数据交换文件写入文件夹
-			filePath := filepath.Join(folderDir, strconv.Itoa(i*len(fragmentGroup[0])+j))
-			err = filetools.WriteFile(filePath, specFileBytes, 0777)
+			specFileName := jsontools.ReadJsonValue(jsonParser, "/GroupInfolist/" + fmt.Sprint(i) + "/SpecFileInfoList/" + fmt.Sprint(j) + "/SpecFileName").(string)
+			filePath := filepath.Join(folderDir, specFileName)
+			err = filetools.WriteFile(filePath, specFileBytes, 0755)
 			if err != nil {
 				return err
 			}
@@ -163,10 +184,19 @@ func generateSpecFileFolder(fragmentGroup [][][]byte, zipFilePath string, receiv
 }
 
 // 从加密过的文件中读取出未加密的fragment
-func generateUnencryptedFragmentBytes(fileInfo FileInfo, senderPublicKeyFilePath string, receiverPrivateKeyFilePath string) ([]byte, error) {
+func generateUnencryptedFragmentBytes(fileInfo FileInfo, receiverPrivateKeyFilePath string, configFilePath string) ([]byte, error) {
 	var err error
 	receiverPrivateKey, err := rsatools.ReadPrivateKeyFile(receiverPrivateKeyFilePath)
-	senderPublicKey, err := rsatools.ReadPublicKeyFile(senderPublicKeyFilePath)
+	jsonParser, err := jsontools.ReadJsonFile(configFilePath)
+	if err != nil {
+		return nil, err
+	}
+	// 获得公钥
+	senderPublicKeyString := jsontools.ReadJsonValue(jsonParser, "/SenderPublicKey")
+	senderPublicKey, err := rsatools.StringToPublicKey(senderPublicKeyString.(string))
+	if err != nil {
+		return nil, err
+	}
 	f, err := os.Open(fileInfo.FilePath)
 	defer f.Close()
 	if err != nil {
@@ -204,14 +234,13 @@ func generateUnencryptedFragmentBytes(fileInfo FileInfo, senderPublicKeyFilePath
 	// 数据验签
 	if rsatools.Verify(bytesCombine(unencryptedHeaderBytes, unencryptedAesKey, unencryptedNonce, unencryptedFragmentBytes), unencryptedSign, senderPublicKey) != nil {
 		fmt.Println("数据验签无法通过")
-		err = fmt.Errorf("数据验签无法通过")
 		return nil, err
 	}
 	return unencryptedFragmentBytes, err
 }
 
 // 生成FragmentSN对应UnencryptedFragmentBytes的Map
-func generateFragmentSN_UnencryptedFragmentBytesMap(groupSN_GroupInfoMap map[int]GroupInfo, fragmentSN_DataFileInfoMap *map[int]FileInfo, senderPublicKeyFilePath string, receiverPrivateKeyFilePath string) (map[int][]byte, error) {
+func generateFragmentSN_UnencryptedFragmentBytesMap(groupSN_GroupInfoMap map[int]GroupInfo, fragmentSN_DataFileInfoMap *map[int]FileInfo, receiverPrivateKeyFilePath string, configFilePath string) (map[int][]byte, error) {
 	var err error
 	groupSN_UnencryptedFragmentBytesMap := make(map[int][]byte)
 	if err != nil {
@@ -251,7 +280,7 @@ func generateFragmentSN_UnencryptedFragmentBytesMap(groupSN_GroupInfoMap map[int
 				}
 				var restoreGroup [][]byte
 				for _, fileInfo := range append(groupInfo.DataFileInfoList, groupInfo.RedundanceFileInfo) {
-					unencryptedFragmentBytes, err := generateUnencryptedFragmentBytes(fileInfo, senderPublicKeyFilePath, receiverPrivateKeyFilePath)
+					unencryptedFragmentBytes, err := generateUnencryptedFragmentBytes(fileInfo, receiverPrivateKeyFilePath, configFilePath)
 					if err != nil {
 						return nil, err
 					}
@@ -267,7 +296,7 @@ func generateFragmentSN_UnencryptedFragmentBytesMap(groupSN_GroupInfoMap map[int
 			}
 		} else if expectedGroupTotal == acturalGroupTotal { // 数据分片已经收齐
 			for _, fileInfo := range groupInfo.DataFileInfoList {
-				unencryptedFragmentBytes, err := generateUnencryptedFragmentBytes(fileInfo, senderPublicKeyFilePath, receiverPrivateKeyFilePath)
+				unencryptedFragmentBytes, err := generateUnencryptedFragmentBytes(fileInfo, receiverPrivateKeyFilePath, configFilePath)
 				if err != nil {
 					return nil, err
 				}
@@ -280,7 +309,7 @@ func generateFragmentSN_UnencryptedFragmentBytesMap(groupSN_GroupInfoMap map[int
 }
 
 // 生成按fragmentSN排序好的fragment的列表,以及要生成的文件的存储位置
-func generateSortedFragmentBytesList(fileSaveDir string, filePathList []string, senderPublicKeyFilePath string, receiverPrivateKeyFilePath string) ([][]byte, string, error) {
+func generateSortedFragmentBytesList(fileSaveDir string, filePathList []string, receiverPrivateKeyFilePath string, configFilePath string) ([][]byte, string, error) {
 	var err error
 	receiverPrivateKey, err := rsatools.ReadPrivateKeyFile(receiverPrivateKeyFilePath)
 	if err != nil {
@@ -318,7 +347,7 @@ func generateSortedFragmentBytesList(fileSaveDir string, filePathList []string, 
 		}
 	}
 	// 对丢失的数据分片进行还原,并读取所有的数据分片
-	fragmentSN_UnencryptedFragmentBytesMap, err := generateFragmentSN_UnencryptedFragmentBytesMap(groupSN_GroupInfoMap, &fragmentSN_DataFileInfoMap, senderPublicKeyFilePath, receiverPrivateKeyFilePath)
+	fragmentSN_UnencryptedFragmentBytesMap, err := generateFragmentSN_UnencryptedFragmentBytesMap(groupSN_GroupInfoMap, &fragmentSN_DataFileInfoMap, receiverPrivateKeyFilePath, configFilePath)
 	if err != nil {
 		return nil, "", err
 	}
@@ -344,7 +373,7 @@ func generateSortedFragmentBytesList(fileSaveDir string, filePathList []string, 
 }
 
 // 对要传输的文件,生成数据交换文件,并写入文件夹
-func GenerateSpecFileFolder(zipFilePath string, divideMethod, groupNum int, receiverPublicKeyFilePath string, senderPrivateKeyFilePath string, configFilePath string, folderDir string) error {
+func GenerateSpecFileFolder(zipFilePath string, divideMethod, groupNum int, senderPrivateKeyFilePath string, configFilePath string, folderDir string) error {
 	dataFragmentList, err := fragment.GenerateDataFragmentList(zipFilePath, fragment.DivideMethod(divideMethod))
 	if err != nil {
 		return err
@@ -358,18 +387,18 @@ func GenerateSpecFileFolder(zipFilePath string, divideMethod, groupNum int, rece
 		}
 	}
 	// 为所有分片添加签名/对称密钥/头部/无意义填充,使之生成数据交换文件,并写入文件夹
-	err = generateSpecFileFolder(fragmentGroup, zipFilePath, receiverPublicKeyFilePath, senderPrivateKeyFilePath, configFilePath, folderDir)
+	err = generateSpecFileFolder(fragmentGroup, zipFilePath, senderPrivateKeyFilePath, configFilePath, folderDir)
 	return err
 }
 
 // 从数据交换文件的文件夹中恢复出要传输的文件,并将文件存储在fileSaveDir中
-func RestoreFromSpecFileFolder(fileSaveDir string, senderPublicKeyFilePath string, receiverPrivateKeyFilePath string, configFilePath string, specFileFoldeDir string) error {
+func RestoreFromSpecFileFolder(fileSaveDir string, receiverPrivateKeyFilePath string, configFilePath string, specFileFoldeDir string) error {
 	var err error
 	filePathList, _, err := filetools.GenerateSpecFilePathNameListFromFolder(specFileFoldeDir)
 	if err != nil {
 		return err
 	}
-	sortedFragmentBytesList, fileSavePath, err := generateSortedFragmentBytesList(fileSaveDir, filePathList, senderPublicKeyFilePath, receiverPrivateKeyFilePath)
+	sortedFragmentBytesList, fileSavePath, err := generateSortedFragmentBytesList(fileSaveDir, filePathList, receiverPrivateKeyFilePath, configFilePath)
 	if err != nil {
 		return err
 	}

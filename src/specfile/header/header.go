@@ -14,10 +14,9 @@ type Header struct {
 	Identification     int32     // 标识.一个文件的所有分片有相同的标识（暂时没用上）
 	FragmentDataLength int32     // 对称加密之前数据交换文件的数据部分长度(加密后会多16字节)
 	Timer              int32     // 发送方能接受的最长等待时间
-	DivideMethod       int8      // 划分方式(2片?4片?8片?)
 	GroupSN            int8      // 冗余分组序列号
 	FragmentSN         int8      // 分片序号(如果是冗余分片,则序号为-1)
-	GroupContent       [8]int8   // 本冗余分组中所有数据分片的FragmentSN
+	GroupContent       [8]int8   // 本冗余分组中所有数据分片的FragmentSN(可能分为2/4/8片)
 }
 
 // 生成一个Header

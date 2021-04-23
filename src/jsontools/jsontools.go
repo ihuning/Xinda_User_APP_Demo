@@ -1,61 +1,56 @@
 package jsontools
 
 import (
-	"encoding/json"
 	"fmt"
 	"xindauserbackground/src/filetools"
+
+	"github.com/Jeffail/gabs/v2"
 )
 
-//定义配置文件解析后的结构
-type JsonRoot struct {
-	SenderName   string     `json:"senderName"`
-	ReceiverName string     `json:"receiverName"`
-	IFSSInfoList []IFSSInfo `json:"IFSSInfolist"`
-	FileInfo     []FileInfo `json:"fileInfo"`
-}
-
-type IFSSInfo struct {
-	IFSSName     string `json:"IFSSName"`
-	IFSSType     string `json:"IFSSType"`
-	IFSSURL      string `json:"IFSSURL"`
-	UserName     string `json:"userName"`
-	UserPassword string `json:"userPassword"`
-}
-
-type FileInfo struct {
-	FileName string `json:"fileName"`
-	IFSSType string `json:"IFSSType"`
-}
-
-// 读取Json文件,并存储在root结构体中
-func ReadJsonFile(filePath string, jsonRoot interface{}) error {
+// 读取Json文件,并生成一个parser
+func ReadJsonFile(filePath string) (*gabs.Container, error) {
 	var err error
 	//ReadFile函数会读取文件的全部内容，并将结果以[]byte类型返回
 	data, err := filetools.ReadFile(filePath)
 	if err != nil {
-		fmt.Println("无法读取Json文件")
-		return err
+		fmt.Println("无法读取json文件", err)
+		return nil, err
 	}
-	//读取的数据为json格式，需要进行解码
-	err = json.Unmarshal(data, jsonRoot)
+	// 将读取到的json bytes转换为parser
+	jsonParser, err := gabs.ParseJSON(data)
 	if err != nil {
-		fmt.Println("无法解析Json文件")
-		return err
+		fmt.Println("无法生成jsonParser", err)
+		return nil, err
 	}
-	return err
+	return jsonParser, err
 }
 
-func WriteJsonFile(filePath string, jsonRoot JsonRoot) error {
-	var err error
-	jsonBytes, err := json.Marshal(jsonRoot)
-	if err != nil {
-		fmt.Println("无法生成Json文件")
-		return err
-	}
-	err = filetools.WriteFile(filePath, jsonBytes, 0755)
-	if err != nil {
-		fmt.Println("无法写入Json文件")
-		return err
-	}
-	return err
+// 打印出json的所有内容
+func PrintJsonContent(jsonParser *gabs.Container) {
+	fmt.Println(jsonParser.StringIndent("", "  "))
 }
+
+// 根据path获取对应的value
+func ReadJsonValue(jsonParser *gabs.Container, path string) interface{} {
+	gObj, err := jsonParser.JSONPointer(path)
+	if err != nil {
+		fmt.Println("无法从jsonParser找到path对应的value", err)
+		return nil
+	}
+	return gObj.Data()
+}
+
+// func WriteJsonFile(filePath string, jsonRoot JsonRoot) error {
+// 	var err error
+// 	jsonBytes, err := json.Marshal(jsonRoot)
+// 	if err != nil {
+// 		fmt.Println("无法生成Json文件")
+// 		return err
+// 	}
+// 	err = filetools.WriteFile(filePath, jsonBytes, 0755)
+// 	if err != nil {
+// 		fmt.Println("无法写入Json文件")
+// 		return err
+// 	}
+// 	return err
+// }
