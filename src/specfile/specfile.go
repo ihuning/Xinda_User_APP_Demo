@@ -19,7 +19,7 @@ import (
 // 每个段的信息
 type StructureInfo struct {
 	Start  int
-	length int
+	Length int
 }
 
 // 加密/未加密的的数据交换文件的结构
@@ -207,25 +207,25 @@ func generateUnencryptedFragmentBytes(fileInfo FileInfo, receiverPrivateKeyFileP
 	if err != nil {
 		return nil, err
 	}
-	encryptedAesKey := make([]byte, fileInfo.EncryptedFileStructure.SymmetricKeyStructure.length)
+	encryptedAesKey := make([]byte, fileInfo.EncryptedFileStructure.SymmetricKeyStructure.Length)
 	f.ReadAt(encryptedAesKey, int64(fileInfo.EncryptedFileStructure.SymmetricKeyStructure.Start))
 	unencryptedAesKey, err := rsatools.DecryptWithPrivateKey(encryptedAesKey, receiverPrivateKey)
 	if err != nil {
 		return nil, err
 	}
-	encryptedNonce := make([]byte, fileInfo.EncryptedFileStructure.NonceStructure.length)
+	encryptedNonce := make([]byte, fileInfo.EncryptedFileStructure.NonceStructure.Length)
 	f.ReadAt(encryptedNonce, int64(fileInfo.EncryptedFileStructure.NonceStructure.Start))
 	unencryptedNonce, err := rsatools.DecryptWithPrivateKey(encryptedNonce, receiverPrivateKey)
 	if err != nil {
 		return nil, err
 	}
-	encryptedFragmentBytes := make([]byte, fileInfo.EncryptedFileStructure.FragmentStructure.length)
+	encryptedFragmentBytes := make([]byte, fileInfo.EncryptedFileStructure.FragmentStructure.Length)
 	f.ReadAt(encryptedFragmentBytes, int64(fileInfo.EncryptedFileStructure.FragmentStructure.Start))
 	unencryptedFragmentBytes, err := aestools.DecryptWithAES(unencryptedAesKey, unencryptedNonce, encryptedFragmentBytes)
 	if err != nil {
 		return nil, err
 	}
-	encryptedSign := make([]byte, fileInfo.EncryptedFileStructure.SignStructure.length)
+	encryptedSign := make([]byte, fileInfo.EncryptedFileStructure.SignStructure.Length)
 	f.ReadAt(encryptedSign, int64(fileInfo.EncryptedFileStructure.SignStructure.Start))
 	unencryptedSign, err := rsatools.DecryptWithPrivateKey(encryptedSign, receiverPrivateKey)
 	if err != nil {
@@ -403,5 +403,9 @@ func RestoreFromSpecFileFolder(fileSaveDir string, receiverPrivateKeyFilePath st
 		return err
 	}
 	err = fragment.RestoreByFragmentList(fileSavePath, sortedFragmentBytesList)
+	if err != nil {
+		return err
+	}
+	err = filetools.Rmdir(specFileFoldeDir) // 删除本地文件,销毁下载记录
 	return err
 }
