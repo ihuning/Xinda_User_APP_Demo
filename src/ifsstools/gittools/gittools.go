@@ -15,7 +15,7 @@ func TestGitConnection(url, username, password string) error {
 	var err error
 	defer func() {
 		if err != nil {
-			fmt.Println("git远程仓库连接测试失败", err)
+			fmt.Println("无法连接git远程仓库", err)
 		}
 	}()
 	tempDir := "./.testGitConnection"
@@ -29,7 +29,7 @@ func CloneRepository(url, repoDir, username, password string) error {
 	var err error
 	defer func() {
 		if err != nil {
-			fmt.Println("git clone失败", err)
+			fmt.Println("无法执行git clone", err)
 		}
 	}()
 	// 如果repoDir已经存在,则需要保护之前的文件,方法为clone空仓库到临时位置,然后移动回来
@@ -53,12 +53,19 @@ func CloneRepository(url, repoDir, username, password string) error {
 			},
 			URL: url,
 		})
+		// 这种方式的目的除了可能是测试clone结果外,还可能是下载数据交换文件的操作,要检查下载了哪些文件.
+		_, fileNameList, err := filetools.GenerateSpecFilePathNameListFromFolder(repoDir)
+		if err == nil {
+			for _, fileName := range fileNameList {
+				fmt.Println("数据交换文件", fileName, "从", url, "使用git方式成功下载", "使用的账户为", username)
+			}
+		}
 	}
 	return err
 }
 
 // 将commit的内容push到在线仓库中
-func PushToRepository(repoDir, username, password string) error {
+func PushToRepository(url, repoDir, username, password string) error {
 	var err error
 	defer func() {
 		if err != nil {
@@ -83,22 +90,24 @@ func PushToRepository(repoDir, username, password string) error {
 		_, err = w.Add(fileName)
 		if err != nil {
 			return err
+		} // 填写commit信息并commit
+		_, err = w.Commit("", &git.CommitOptions{
+			Author: &object.Signature{},
+		})
+		if err != nil {
+			return err
+		}
+		// 使用默认选项push
+		err = r.Push(&git.PushOptions{
+			Auth: &http.BasicAuth{
+				Username: username,
+				Password: password,
+			},
+		})
+		if err == nil {
+			fmt.Println("数据交换文件", fileName, "使用git方式成功发送到了", url, "使用的账户为", username)
 		}
 	}
-	// 填写commit信息并commit
-	_, err = w.Commit("", &git.CommitOptions{
-		Author: &object.Signature{},
-	})
-	if err != nil {
-		return err
-	}
-	// 使用默认选项push
-	err = r.Push(&git.PushOptions{
-		Auth: &http.BasicAuth{
-			Username: username,
-			Password: password,
-		},
-	})
 	return err
 }
 

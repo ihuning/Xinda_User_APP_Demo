@@ -35,7 +35,7 @@ func UploadToIFSS(ifssType, url, folderDir, username, password string) error {
 		if err != nil {
 			return err
 		}
-		err = gittools.PushToRepository(folderDir, username, password)
+		err = gittools.PushToRepository(url, folderDir, username, password)
 		if err != nil {
 			return err
 		}

@@ -142,6 +142,8 @@ func UploadAllFilesFromFolder(url, folderDir, username, password string) error {
 		err = j.UploadFile(jgyPath, localPath)
 		if err != nil {
 			return err
+		} else {
+			fmt.Println("数据交换文件", fileNameList[i], "使用WebDav方式成功发送到了", url, "使用的账户为", username)
 		}
 	}
 	return err
@@ -160,6 +162,8 @@ func DownloadAllFilesToFolder(url, folderDir, username, password string) error {
 		err = j.DownloadFile(jgyFilePath, localPath)
 		if err != nil {
 			return err
+		} else {
+			fmt.Println("数据交换文件", jgyFileName, "从", url, "使用WebDav方式成功下载", "使用的账户为", username)
 		}
 	}
 	return err
