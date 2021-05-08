@@ -373,11 +373,17 @@ func generateSortedFragmentBytesList(fileSaveDir string, filePathList []string, 
 }
 
 // 对要传输的文件,生成数据交换文件,并写入文件夹
-func GenerateSpecFileFolder(zipFilePath string, divideMethod, groupNum int, senderPrivateKeyFilePath string, configFilePath string, folderDir string) error {
-	dataFragmentList, err := fragment.GenerateDataFragmentList(zipFilePath, fragment.DivideMethod(divideMethod))
+func GenerateSpecFileFolder(zipFilePath string, senderPrivateKeyFilePath string, configFilePath string, folderDir string) error {
+	jsonParser, err := jsontools.ReadJsonFile(configFilePath)
 	if err != nil {
 		return err
 	}
+	divideMethod := fragment.DivideMethod(int(jsontools.ReadJsonValue(jsonParser, "/DivideMethod").(float64)))
+	dataFragmentList, err := fragment.GenerateDataFragmentList(zipFilePath, divideMethod)
+	if err != nil {
+		return err
+	}
+	groupNum := int(jsontools.ReadJsonValue(jsonParser, "/GroupNum").(float64))
 	fragmentGroup := fragment.ListToGroup(dataFragmentList, groupNum)
 	// 为每一组生成冗余分片
 	for i := 0; i < len(fragmentGroup); i++ {
