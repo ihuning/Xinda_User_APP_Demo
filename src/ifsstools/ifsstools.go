@@ -3,44 +3,27 @@ package ifsstools
 import (
 	"xindauserbackground/src/filetools"
 	"xindauserbackground/src/ifsstools/gittools"
-	"xindauserbackground/src/ifsstools/jianguoyuntools"
+	"xindauserbackground/src/ifsstools/webdavtools"
 )
 
-// 初始化IFSS连接,指定通信用到的文件夹(在通信开始前,IFSS应该被clean过)
-func TestIFSSConnection(ifssType, url, username, password string) error {
-	var err error
-	switch ifssType {
-	case "git":
-		err = gittools.TestGitConnection(url, username, password)
-		if err != nil {
-			return err
-		}
-	case "jianguoyun":
-		err = jianguoyuntools.TestJianGuoYunConnection(url, username, password)
-		if err != nil {
-			return err
-		}
-	default:
-		panic("IFSS类型错误")
-	}
-	return err
-}
 
 // 上传文件夹中的数据交换文件到IFSS
 func UploadToIFSS(ifssType, url, folderDir, username, password string) error {
 	var err error
 	switch ifssType {
 	case "git":
-		err = gittools.CloneRepository(url, folderDir, username, password)
+		g := gittools.NewGitClient(url, folderDir, username, password)
+		err = g.CloneRepository()
 		if err != nil {
 			return err
 		}
-		err = gittools.PushToRepository(url, folderDir, username, password)
+		err = g.PushToRepository()
 		if err != nil {
 			return err
 		}
 	case "jianguoyun":
-		err = jianguoyuntools.UploadAllFilesFromFolder(url, folderDir, username, password)
+		w := webdavtools.NewWebdavClient(url, folderDir, username, password)
+		err = w.UploadAllFilesFromFolder()
 		if err != nil {
 			return err
 		}
@@ -56,12 +39,14 @@ func DownloadFromIFSS(ifssType, url, folderDir, username, password string) error
 	var err error
 	switch ifssType {
 	case "git":
-		err = gittools.CloneRepository(url, folderDir, username, password)
+		g := gittools.NewGitClient(url, folderDir, username, password)
+		err = g.CloneRepository()
 		if err != nil {
 			return err
 		}
 	case "jianguoyun":
-		err = jianguoyuntools.DownloadAllFilesToFolder(url, folderDir, username, password)
+		w := webdavtools.NewWebdavClient(url, folderDir, username, password)
+		err = w.DownloadAllFilesToFolder()
 		if err != nil {
 			return err
 		}
@@ -76,12 +61,14 @@ func CleanIFSS(ifssType, url, folderDir, username, password string) error {
 	var err error
 	switch ifssType {
 	case "git":
-		err = gittools.CleanRepository(folderDir, username, password)
+		g := gittools.NewGitClient(url, folderDir, username, password)
+		err = g.CleanRepository()
 		if err != nil {
 			return err
 		}
 	case "jianguoyun":
-		err = jianguoyuntools.CleanJianguoyun(url, username, password)
+		w := webdavtools.NewWebdavClient(url, folderDir, username, password)
+		err = w.CleanWebdav()
 		if err != nil {
 			return err
 		}

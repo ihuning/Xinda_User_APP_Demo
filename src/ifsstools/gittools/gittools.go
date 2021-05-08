@@ -11,21 +11,26 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/transport/http"
 )
 
-func TestGitConnection(url, username, password string) error {
-	var err error
-	defer func() {
-		if err != nil {
-			fmt.Println("无法连接git远程仓库", err)
-		}
-	}()
-	tempDir := "./.testGitConnection"
-	err = CloneRepository(url, tempDir, username, password)
-	err = filetools.Rmdir(tempDir)
-	return err
+type Git struct {
+	UserName string
+	Password string
+	Url      string
+	RepoDir  string
+}
+
+// 新建一个git连接
+func NewGitClient(url, repoDir, userName, password string) Git {
+	g := Git{
+		UserName: userName,
+		Password: password,
+		Url:      url,
+		RepoDir:  repoDir,
+	}
+	return g
 }
 
 // 将仓库克隆到指定位置
-func CloneRepository(url, repoDir, username, password string) error {
+func (g Git) CloneRepository() error {
 	var err error
 	defer func() {
 		if err != nil {
@@ -33,31 +38,31 @@ func CloneRepository(url, repoDir, username, password string) error {
 		}
 	}()
 	// 如果repoDir已经存在,则需要保护之前的文件,方法为clone空仓库到临时位置,然后移动回来
-	isPathExists := filetools.IsPathExists(repoDir)
+	isPathExists := filetools.IsPathExists(g.RepoDir)
 	if isPathExists {
-		tempDir := filepath.Join(repoDir, ".temp")
+		tempDir := filepath.Join(g.RepoDir, ".temp")
 		_, err = git.PlainClone(tempDir, false, &git.CloneOptions{
 			Auth: &http.BasicAuth{
-				Username: username,
-				Password: password,
+				Username: g.UserName,
+				Password: g.Password,
 			},
-			URL: url,
+			URL: g.Url,
 		})
-		err = filetools.MoveAllFilesToNewFolder(tempDir, repoDir)
+		err = filetools.MoveAllFilesToNewFolder(tempDir, g.RepoDir)
 		err = filetools.Rmdir(tempDir)
 	} else {
-		_, err = git.PlainClone(repoDir, false, &git.CloneOptions{
+		_, err = git.PlainClone(g.RepoDir, false, &git.CloneOptions{
 			Auth: &http.BasicAuth{
-				Username: username,
-				Password: password,
+				Username: g.UserName,
+				Password: g.Password,
 			},
-			URL: url,
+			URL: g.Url,
 		})
 		// 这种方式的目的除了可能是测试clone结果外,还可能是下载数据交换文件的操作,要检查下载了哪些文件.
-		_, fileNameList, err := filetools.GenerateSpecFilePathNameListFromFolder(repoDir)
+		_, fileNameList, err := filetools.GenerateSpecFilePathNameListFromFolder(g.RepoDir)
 		if err == nil {
 			for _, fileName := range fileNameList {
-				fmt.Println("数据交换文件", fileName, "从", url, "使用git方式成功下载", "使用的账户为", username)
+				fmt.Println("数据交换文件", fileName, "从", g.Url, "使用git方式成功下载", "使用的账户为", g.UserName)
 			}
 		}
 	}
@@ -65,7 +70,7 @@ func CloneRepository(url, repoDir, username, password string) error {
 }
 
 // 将commit的内容push到在线仓库中
-func PushToRepository(url, repoDir, username, password string) error {
+func (g Git) PushToRepository() error {
 	var err error
 	defer func() {
 		if err != nil {
@@ -73,7 +78,7 @@ func PushToRepository(url, repoDir, username, password string) error {
 		}
 	}()
 	// commit过程
-	r, err := git.PlainOpen(repoDir)
+	r, err := git.PlainOpen(g.RepoDir)
 	if err != nil {
 		return err
 	}
@@ -81,7 +86,7 @@ func PushToRepository(url, repoDir, username, password string) error {
 	if err != nil {
 		return err
 	}
-	_, fileNameList, err := filetools.GenerateSpecFilePathNameListFromFolder(repoDir)
+	_, fileNameList, err := filetools.GenerateSpecFilePathNameListFromFolder(g.RepoDir)
 	if err != nil {
 		return err
 	}
@@ -100,19 +105,19 @@ func PushToRepository(url, repoDir, username, password string) error {
 		// 使用默认选项push
 		err = r.Push(&git.PushOptions{
 			Auth: &http.BasicAuth{
-				Username: username,
-				Password: password,
+				Username: g.UserName,
+				Password: g.Password,
 			},
 		})
 		if err == nil {
-			fmt.Println("数据交换文件", fileName, "使用git方式成功发送到了", url, "使用的账户为", username)
+			fmt.Println("数据交换文件", fileName, "使用git方式成功发送到了", g.Url, "使用的账户为", g.UserName)
 		}
 	}
 	return err
 }
 
 // 从在线仓库pull下来
-func PullFromRepository(repoDir, username, password string) error {
+func (g Git) PullFromRepository() error {
 	var err error
 	defer func() {
 		if err != nil {
@@ -120,7 +125,7 @@ func PullFromRepository(repoDir, username, password string) error {
 		}
 	}()
 	// 打开本地仓库
-	r, err := git.PlainOpen(repoDir)
+	r, err := git.PlainOpen(g.RepoDir)
 	if err != nil {
 		return err
 	}
@@ -137,14 +142,15 @@ func PullFromRepository(repoDir, username, password string) error {
 	return nil
 }
 
-func CleanRepository(repoDir, username, password string) error {
+// 清除在线仓库
+func (g Git) CleanRepository() error {
 	var err error
 	defer func() {
 		if err != nil {
 			fmt.Println("无法clean仓库", err)
 		}
 	}()
-	r, err := git.PlainOpen(repoDir)
+	r, err := git.PlainOpen(g.RepoDir)
 	if err != nil {
 		return err
 	}
@@ -178,8 +184,11 @@ func CleanRepository(repoDir, username, password string) error {
 	err = r.Push(&git.PushOptions{
 		Force: true,
 		Auth: &http.BasicAuth{
-			Username: username,
-			Password: password,
+			Username: g.UserName,
+			Password: g.Password,
 		}})
+	if err == nil {
+		fmt.Println("git", g.Url, "中的内容已被成功清除", "使用的账户为", g.UserName)
+	}
 	return err
 }
