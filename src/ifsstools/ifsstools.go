@@ -22,7 +22,7 @@ func generateIFSSFolders(folderDir, configFilePath string) ([]IFSSFolderInfo, er
 	if err != nil {
 		return nil, err
 	}
-	var IFSSFolderInfoList []IFSSFolderInfo 
+	var IFSSFolderInfoList []IFSSFolderInfo
 	for _, IFSSInfo := range jsonparser.Search("IFSSInfoList").Children() {
 		var IFSSFolderInfo IFSSFolderInfo
 		IFSSFolderInfo.IFSSFolderDir = filepath.Join(folderDir, jsontools.ReadJsonValue(IFSSInfo, "/IFSSName").(string))
@@ -31,7 +31,7 @@ func generateIFSSFolders(folderDir, configFilePath string) ([]IFSSFolderInfo, er
 		IFSSFolderInfo.IFSSUserName = jsontools.ReadJsonValue(IFSSInfo, "/IFSSUserName").(string)
 		IFSSFolderInfo.IFSSUserPassword = jsontools.ReadJsonValue(IFSSInfo, "/IFSSUserPassword").(string)
 		IFSSFolderInfoList = append(IFSSFolderInfoList, IFSSFolderInfo)
-	}	
+	}
 	return IFSSFolderInfoList, err
 }
 
@@ -64,51 +64,66 @@ func UploadToIFSS(folderDir, configFilePath string) error {
 			panic("IFSS类型错误")
 		}
 	}
-	
+
 	err = filetools.Rmdir(folderDir) // 删除本地文件,销毁上传记录
 	return err
 }
 
 // 从IFSS下载数据交换文件到文件夹中
-func DownloadFromIFSS(ifssType, url, folderDir, username, password string) error {
+func DownloadFromIFSS(folderDir, configFilePath string) error {
 	var err error
-	switch ifssType {
-	case "git":
-		g := gittools.NewGitClient(url, folderDir, username, password)
-		err = g.CloneRepository()
-		if err != nil {
-			return err
+	IFSSFolderInfoList, err := generateIFSSFolders(folderDir, configFilePath)
+	if err != nil {
+		return err
+	}
+	for _, IFSSFolderInfo := range IFSSFolderInfoList {
+		switch IFSSFolderInfo.IFSSType {
+		case "git":
+			g := gittools.NewGitClient(IFSSFolderInfo.IFSSURL, IFSSFolderInfo.IFSSFolderDir, IFSSFolderInfo.IFSSUserName, IFSSFolderInfo.IFSSUserPassword)
+			err = g.CloneRepository()
+			if err != nil {
+				return err
+			}
+		case "webdav":
+			w := webdavtools.NewWebdavClient(IFSSFolderInfo.IFSSURL, IFSSFolderInfo.IFSSFolderDir, IFSSFolderInfo.IFSSUserName, IFSSFolderInfo.IFSSUserPassword)
+			err = w.DownloadAllFilesToFolder()
+			if err != nil {
+				return err
+			}
+		default:
+			panic("IFSS类型错误")
 		}
-	case "jianguoyun":
-		w := webdavtools.NewWebdavClient(url, folderDir, username, password)
-		err = w.DownloadAllFilesToFolder()
-		if err != nil {
-			return err
-		}
-	default:
-		panic("IFSS类型错误")
+		// 把多通道下载的数据交换文件集中到一个文件夹
+		filePathList, _, _ := filetools.GenerateSpecFilePathNameListFromFolder(IFSSFolderInfo.IFSSFolderDir)
+		filetools.MoveFilesToNewFolder(filePathList, folderDir)
 	}
 	return err
 }
 
 // 在通信完成时,删除IFSS和本地目录中的所有的数据交换文件,以销毁通信记录
-func CleanIFSS(ifssType, url, folderDir, username, password string) error {
+func CleanIFSS(folderDir, configFilePath string) error {
 	var err error
-	switch ifssType {
-	case "git":
-		g := gittools.NewGitClient(url, folderDir, username, password)
-		err = g.CleanRepository()
-		if err != nil {
-			return err
+	IFSSFolderInfoList, err := generateIFSSFolders(folderDir, configFilePath)
+	if err != nil {
+		return err
+	}
+	for _, IFSSFolderInfo := range IFSSFolderInfoList {
+		switch IFSSFolderInfo.IFSSType {
+		case "git":
+			g := gittools.NewGitClient(IFSSFolderInfo.IFSSURL, IFSSFolderInfo.IFSSFolderDir, IFSSFolderInfo.IFSSUserName, IFSSFolderInfo.IFSSUserPassword)
+			err = g.CleanRepository()
+			if err != nil {
+				return err
+			}
+		case "webdav":
+			w := webdavtools.NewWebdavClient(IFSSFolderInfo.IFSSURL, IFSSFolderInfo.IFSSFolderDir, IFSSFolderInfo.IFSSUserName, IFSSFolderInfo.IFSSUserPassword)
+			err = w.CleanWebdav()
+			if err != nil {
+				return err
+			}
+		default:
+			panic("IFSS类型错误")
 		}
-	case "jianguoyun":
-		w := webdavtools.NewWebdavClient(url, folderDir, username, password)
-		err = w.CleanWebdav()
-		if err != nil {
-			return err
-		}
-	default:
-		panic("IFSS类型错误")
 	}
 	err = filetools.Rmdir(folderDir) // 删除本地文件,销毁下载记录
 	return err

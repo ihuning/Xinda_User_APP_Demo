@@ -419,9 +419,5 @@ func RestoreFromSpecFileFolder(fileSaveDir string, receiverPrivateKeyFilePath st
 		return err
 	}
 	err = fragment.RestoreByFragmentList(fileSavePath, sortedFragmentBytesList)
-	if err != nil {
-		return err
-	}
-	err = filetools.Rmdir(specFileFoldeDir) // 删除本地文件,销毁下载记录
 	return err
 }
