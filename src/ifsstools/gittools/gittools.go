@@ -48,6 +48,7 @@ func (g Git) CloneRepository() error {
 			},
 			URL: g.Url,
 		})
+		err = filetools.Rmdir(".git") // 如果有这个文件夹要删除
 		err = filetools.MoveAllFilesToNewFolder(tempDir, g.RepoDir)
 		err = filetools.Rmdir(tempDir)
 	} else {

@@ -13,7 +13,7 @@ import (
 	"xindauserbackground/src/specfile/fragment"
 	"xindauserbackground/src/specfile/header"
 	"xindauserbackground/src/specfile/padding"
-	"xindauserbackground/src/specfile/redudance"
+	redundance "xindauserbackground/src/specfile/redudance"
 )
 
 // 每个段的信息
@@ -111,40 +111,42 @@ func generateSpecFileFolder(fragmentGroup [][][]byte, zipFilePath string, sender
 		return err
 	}
 	// 获得公钥
-	receiverPublicKeyString := jsontools.ReadJsonValue(jsonParser, "/ReceiverPublicKey")
-	receiverPublicKey, err := rsatools.StringToPublicKey(receiverPublicKeyString.(string))
+	receiverPublicKeyString := jsontools.ReadJsonValue(jsonParser, "/ReceiverPublicKey").(string)
+	receiverPublicKey, err := rsatools.StringToPublicKey(receiverPublicKeyString)
 	if err != nil {
 		return err
 	}
 	// 从json中获得共有的信息
+	divideMethod := int(jsontools.ReadJsonValue(jsonParser, "/DivideMethod").(float64))
+	groupNum := int(jsontools.ReadJsonValue(jsonParser, "/GroupNum").(float64))
+	maxNumInAGroup := fragment.CalculateMaxNumInAGroup(divideMethod, groupNum)
 	senderName := jsontools.ReadJsonValue(jsonParser, "/SenderName").(string)
 	receiverName := jsontools.ReadJsonValue(jsonParser, "/ReceiverName").(string)
 	fileName := jsontools.ReadJsonValue(jsonParser, "/FileName").(string)
 	identification := int32(jsontools.ReadJsonValue(jsonParser, "/Identification").(float64))
 	fragmentDataLength := int32(jsontools.ReadJsonValue(jsonParser, "/FragmentDataLength").(float64))
 	timer := int32(jsontools.ReadJsonValue(jsonParser, "/Timer").(float64))
-	// groupNum := len(jsontools.ReadJsonValue(jsonParser, "/GroupInfolist").([]interface{}))
 	for i := 0; i < len(fragmentGroup); i++ {
 		fragmentNumInGroup := len(fragmentGroup[i])
 		for j := 0; j < fragmentNumInGroup; j++ {
 			var groupSN = int8(i)
 			var groupContent []int8
 			for k := 0; k < fragmentNumInGroup-1; k++ {
-				groupContent = append(groupContent, int8(i*len(fragmentGroup[0])+k))
+				groupContent = append(groupContent, int8(i*maxNumInAGroup+k))
 			}
 			var isRedundant = bool(j+1 == fragmentNumInGroup) // 如果是组中最后一个分片,那就是冗余分片
 			var fragmentSN int8
 			if isRedundant {
 				fragmentSN = -1
 			} else {
-				fragmentSN = int8(i*len(fragmentGroup[0]) + j)
+				fragmentSN = int8(i*maxNumInAGroup + j)
 			}
-			headerBytes, err := header.GenerateHeaderBytes(senderName, receiverName, fileName, identification, fragmentDataLength, timer, groupSN, fragmentSN, groupContent) // 999的都是预留的字段
+			headerBytes, err := header.GenerateHeaderBytes(senderName, receiverName, fileName, identification, fragmentDataLength, timer, groupSN, fragmentSN, groupContent)
 			if err != nil {
 				return err
 			}
 			aesKey, nonce, err := aestools.InitAES()
-			paddingSize := int(jsontools.ReadJsonValue(jsonParser, "/GroupInfolist/" + fmt.Sprint(i) + "/SpecFileInfoList/" + fmt.Sprint(j) + "/PaddingSize").(float64))
+			paddingSize := int(jsontools.ReadJsonValue(jsonParser, "/GroupInfolist/"+fmt.Sprint(i)+"/SpecFileInfoList/"+fmt.Sprint(j)+"/PaddingSize").(float64))
 			padding := padding.GeneratePadding(paddingSize)
 			sign, err := rsatools.Sign(bytesCombine(headerBytes, aesKey, nonce, fragmentGroup[i][j]), senderPrivateKey)
 			if err != nil {
@@ -172,8 +174,9 @@ func generateSpecFileFolder(fragmentGroup [][][]byte, zipFilePath string, sender
 			}
 			specFileBytes := bytesCombine(encryptedHeaderBytes, encryptedAesKey, encryptedNonce, encryptedFragmentBytes, encryptedSign, padding)
 			// 把数据交换文件写入文件夹
-			specFileName := jsontools.ReadJsonValue(jsonParser, "/GroupInfolist/" + fmt.Sprint(i) + "/SpecFileInfoList/" + fmt.Sprint(j) + "/SpecFileName").(string)
-			filePath := filepath.Join(folderDir, specFileName)
+			specFileFolder := jsontools.ReadJsonValue(jsonParser, "/GroupInfolist/"+fmt.Sprint(i)+"/SpecFileInfoList/"+fmt.Sprint(j)+"/IFSSName").(string)
+			specFileName := jsontools.ReadJsonValue(jsonParser, "/GroupInfolist/"+fmt.Sprint(i)+"/SpecFileInfoList/"+fmt.Sprint(j)+"/SpecFileName").(string)
+			filePath := filepath.Join(folderDir, specFileFolder, specFileName)
 			err = filetools.WriteFile(filePath, specFileBytes, 0755)
 			if err != nil {
 				return err
@@ -192,8 +195,8 @@ func generateUnencryptedFragmentBytes(fileInfo FileInfo, receiverPrivateKeyFileP
 		return nil, err
 	}
 	// 获得公钥
-	senderPublicKeyString := jsontools.ReadJsonValue(jsonParser, "/SenderPublicKey")
-	senderPublicKey, err := rsatools.StringToPublicKey(senderPublicKeyString.(string))
+	senderPublicKeyString := jsontools.ReadJsonValue(jsonParser, "/SenderPublicKey").(string)
+	senderPublicKey, err := rsatools.StringToPublicKey(senderPublicKeyString)
 	if err != nil {
 		return nil, err
 	}
@@ -353,16 +356,23 @@ func generateSortedFragmentBytesList(fileSaveDir string, filePathList []string, 
 	}
 	// 获得原始传输文件的文件名,并生成文件存储路径
 	fileName := groupSN_GroupInfoMap[0].DataFileInfoList[0].Header.GetFileName()
-	err = filetools.Mkdir(fileSaveDir)
-	if err != nil {
-		return nil, "", err
-	}
 	fileSavePath := filepath.Join(fileSaveDir, fileName)
-	// 给fragmentSN排序，从小到大
 	var fragmentSNList []int
 	for fragmentSN := range fragmentSN_UnencryptedFragmentBytesMap {
 		fragmentSNList = append(fragmentSNList, fragmentSN)
 	}
+	// 判断分片数量够不够header里面的DivideMethod的数量,不是的话没法还原
+	jsonParser, err := jsontools.ReadJsonFile(configFilePath)
+	if err != nil {
+		return nil, "", err
+	}
+	divideMethod := int(jsontools.ReadJsonValue(jsonParser, "/DivideMethod").(float64))
+	if len(fragmentSNList) != divideMethod {
+		err = fmt.Errorf("收到的分片数量不够")
+		fmt.Println("无法还原出原文件", err)
+		return nil, "", err
+	}
+	// 给fragmentSN排序，从小到大
 	sort.Sort(sort.IntSlice(fragmentSNList))
 	// 生成按fragmentSN排序好的FragmentBytesList
 	var sortedFragmentBytesList [][]byte

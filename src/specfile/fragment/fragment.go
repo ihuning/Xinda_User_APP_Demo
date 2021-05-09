@@ -131,9 +131,14 @@ func RestoreByFragmentList(filePath string, fragmentList [][]byte) error {
 	return err
 }
 
+// 计算每个组当中最多可能有多少个分片
+func CalculateMaxNumInAGroup(fragmentNum, groupNum int) int {
+	return int(math.Ceil(float64(fragmentNum) / float64(groupNum)))
+}
+
 // 把fragment组成的列表转成均分的组
 func ListToGroup(fragmentList [][]byte, groupNum int) (fragmentGroup [][][]byte) {
-	maxNumInAGroup := int(math.Ceil(float64(len(fragmentList)) / float64(groupNum)))
+	maxNumInAGroup := CalculateMaxNumInAGroup(len(fragmentList), groupNum)
 	for i := 0; i < groupNum; i++ {
 		fragmentGroup = append(fragmentGroup, [][]byte{})
 	}
