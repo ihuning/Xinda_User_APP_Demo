@@ -18,18 +18,18 @@ type IFSSFolderInfo struct {
 
 func generateIFSSFolders(folderDir, configFilePath string) ([]IFSSFolderInfo, error) {
 	var err error
-	jsonparser, err := jsontools.ReadJsonFile(configFilePath)
+	j, err := jsontools.ReadJsonFile(configFilePath)
 	if err != nil {
 		return nil, err
 	}
 	var IFSSFolderInfoList []IFSSFolderInfo
-	for _, IFSSInfo := range jsonparser.Search("IFSSInfoList").Children() {
+	for _, IFSSInfo := range j.SearchChildren("IFSSInfoList") {
 		var IFSSFolderInfo IFSSFolderInfo
-		IFSSFolderInfo.IFSSFolderDir = filepath.Join(folderDir, jsontools.ReadJsonValue(IFSSInfo, "/IFSSName").(string))
-		IFSSFolderInfo.IFSSType = jsontools.ReadJsonValue(IFSSInfo, "/IFSSType").(string)
-		IFSSFolderInfo.IFSSURL = jsontools.ReadJsonValue(IFSSInfo, "/IFSSURL").(string)
-		IFSSFolderInfo.IFSSUserName = jsontools.ReadJsonValue(IFSSInfo, "/IFSSUserName").(string)
-		IFSSFolderInfo.IFSSUserPassword = jsontools.ReadJsonValue(IFSSInfo, "/IFSSUserPassword").(string)
+		IFSSFolderInfo.IFSSFolderDir = filepath.Join(folderDir, IFSSInfo.ReadJsonValue("/IFSSName").(string))
+		IFSSFolderInfo.IFSSType = IFSSInfo.ReadJsonValue("/IFSSType").(string)
+		IFSSFolderInfo.IFSSURL = IFSSInfo.ReadJsonValue("/IFSSURL").(string)
+		IFSSFolderInfo.IFSSUserName = IFSSInfo.ReadJsonValue("/IFSSUserName").(string)
+		IFSSFolderInfo.IFSSUserPassword = IFSSInfo.ReadJsonValue("/IFSSUserPassword").(string)
 		IFSSFolderInfoList = append(IFSSFolderInfoList, IFSSFolderInfo)
 	}
 	return IFSSFolderInfoList, err
