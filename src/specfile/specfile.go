@@ -70,7 +70,7 @@ func generateFileStructure(h header.Header) (unencryptedFileStructure FileStruct
 	encryptedNonceStructure := StructureInfo{encryptedNonceStart, encryptedNonceLength}
 	// Fragment
 	unencryptedFragmentStart := unencryptedNonceStart + unencryptedNonceLength
-	unencryptedFragmentLength := int(h.GetFragmentDataLength())
+	unencryptedFragmentLength := int(h.GetFileDataLength())
 	unencryptedFragmentStructure := StructureInfo{unencryptedFragmentStart, unencryptedFragmentLength}
 	encryptedFragmentStart := encryptedNonceStart + encryptedNonceLength
 	encryptedFragmentLength := aestools.GetCiphertextLength(unencryptedFragmentLength)
@@ -120,7 +120,7 @@ func generateSpecFileFolder(fragmentGroup [][][]byte, zipFilePath string, sender
 	receiverName := jsonParser.ReadJsonValue("/ReceiverName").(string)
 	fileName := jsonParser.ReadJsonValue("/FileName").(string)
 	identification := int32(jsonParser.ReadJsonValue("/Identification").(float64))
-	fragmentDataLength := int32(jsonParser.ReadJsonValue("/FragmentDataLength").(float64))
+	fileDataLength := int32(jsonParser.ReadJsonValue("/FileDataLength").(float64))
 	timer := int32(jsonParser.ReadJsonValue("/Timer").(float64))
 	for i := 0; i < len(fragmentGroup); i++ {
 		fragmentNumInGroup := len(fragmentGroup[i])
@@ -137,7 +137,7 @@ func generateSpecFileFolder(fragmentGroup [][][]byte, zipFilePath string, sender
 			} else {
 				fragmentSN = int8(i*maxNumInAGroup + j)
 			}
-			headerBytes, err := header.GenerateHeaderBytes(senderName, receiverName, fileName, identification, fragmentDataLength, timer, groupSN, fragmentSN, groupContent)
+			headerBytes, err := header.GenerateHeaderBytes(senderName, receiverName, fileName, identification, fileDataLength, timer, groupSN, fragmentSN, groupContent)
 			if err != nil {
 				return err
 			}
@@ -170,8 +170,8 @@ func generateSpecFileFolder(fragmentGroup [][][]byte, zipFilePath string, sender
 			}
 			specFileBytes := bytesCombine(encryptedHeaderBytes, encryptedAesKey, encryptedNonce, encryptedFragmentBytes, encryptedSign, padding)
 			// 把数据交换文件写入文件夹
-			specFileFolder := jsonParser.ReadJsonValue("/GroupInfolist/"+fmt.Sprint(i)+"/SpecFileInfoList/"+fmt.Sprint(j)+"/IFSSName").(string)
-			specFileName := jsonParser.ReadJsonValue("/GroupInfolist/"+fmt.Sprint(i)+"/SpecFileInfoList/"+fmt.Sprint(j)+"/SpecFileName").(string)
+			specFileFolder := jsonParser.ReadJsonValue("/GroupInfolist/" + fmt.Sprint(i) + "/SpecFileInfoList/" + fmt.Sprint(j) + "/IFSSName").(string)
+			specFileName := jsonParser.ReadJsonValue("/GroupInfolist/" + fmt.Sprint(i) + "/SpecFileInfoList/" + fmt.Sprint(j) + "/SpecFileName").(string)
 			filePath := filepath.Join(folderDir, specFileFolder, specFileName)
 			err = filetools.WriteFile(filePath, specFileBytes, 0755)
 			if err != nil {

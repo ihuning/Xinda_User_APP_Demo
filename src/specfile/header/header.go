@@ -8,24 +8,24 @@ import (
 )
 
 type Header struct {
-	SenderName         [20]byte  // 发送者的代号
-	ReceiverName       [20]byte  // 接收者的代号
-	FileName           [255]byte // 待发送的原文件（不是数据交换文件）的文件名
-	Identification     int32     // 标识.一个文件的所有分片有相同的标识（暂时没用上）
-	FragmentDataLength int32     // 对称加密之前数据交换文件的数据部分长度(加密后会多16字节)
-	Timer              int32     // 发送方能接受的最长等待时间
-	GroupSN            int8      // 冗余分组序列号
-	FragmentSN         int8      // 分片序号(如果是冗余分片,则序号为-1)
-	GroupContent       [8]int8   // 本冗余分组中所有数据分片的FragmentSN(可能分为2/4/8片)
+	SenderName     [20]byte  // 发送者的代号
+	ReceiverName   [20]byte  // 接收者的代号
+	FileName       [255]byte // 待发送的原文件（不是数据交换文件）的文件名
+	Identification int32     // 本通信过程的标识(发送和接收过程保持一致)
+	FileDataLength int32     // 对称加密之前数据交换文件的数据部分长度(加密后会多16字节)
+	Timer          int32     // 发送方能接受的最长等待时间
+	GroupSN        int8      // 冗余分组序列号
+	FragmentSN     int8      // 分片序号(如果是冗余分片,则序号为-1)
+	GroupContent   [8]int8   // 本冗余分组中所有数据分片的FragmentSN
 }
 
 // 生成一个Header
-func (h *Header) generateHeader(senderName, receiverName, fileName string, identification, fragmentDataLength, timer int32, groupSN, fragmentSN int8, groupContent []int8) {
+func (h *Header) generateHeader(senderName, receiverName, fileName string, identification, fileDataLength, timer int32, groupSN, fragmentSN int8, groupContent []int8) {
 	h.SetSenderName(senderName)
 	h.SetReceiverName(receiverName)
 	h.SetFileName(fileName)
 	h.SetIdentification(identification)
-	h.SetFragmentDataLength(fragmentDataLength)
+	h.SetFileDataLength(fileDataLength)
 	h.SetTimer(timer)
 	h.SetGroupSN(groupSN)
 	h.SetFragmentSN(fragmentSN)
@@ -66,9 +66,9 @@ func (h *Header) BytesToHeader(readBytes []byte) error {
 }
 
 // 生成一个结构体,并将结构体转为对应的bytes
-func GenerateHeaderBytes(senderName, receiverName, fileName string, identification, fragmentDataLength, timer int32, groupSN, fragmentSN int8, groupContent []int8) ([]byte, error) {
+func GenerateHeaderBytes(senderName, receiverName, fileName string, identification, fileDataLength, timer int32, groupSN, fragmentSN int8, groupContent []int8) ([]byte, error) {
 	var header *Header = &Header{}
-	header.generateHeader(senderName, receiverName, fileName, identification, fragmentDataLength, timer, groupSN, fragmentSN, groupContent)
+	header.generateHeader(senderName, receiverName, fileName, identification, fileDataLength, timer, groupSN, fragmentSN, groupContent)
 	headerBytes, err := header.HeaderToBytes()
 	return headerBytes, err
 }
@@ -113,13 +113,12 @@ func (h Header) GetFileName() string {
 	return string(fileNameBytes)
 }
 
-
 func (h Header) GetIdentification() int32 {
 	return h.Identification
 }
 
-func (h Header) GetFragmentDataLength() int32 {
-	return h.FragmentDataLength
+func (h Header) GetFileDataLength() int32 {
+	return h.FileDataLength
 }
 
 func (h Header) GetTimer() int32 {
@@ -164,8 +163,8 @@ func (h *Header) SetIdentification(identification int32) {
 	(*h).Identification = identification
 }
 
-func (h *Header) SetFragmentDataLength(fragmentDataLength int32) {
-	(*h).FragmentDataLength = fragmentDataLength
+func (h *Header) SetFileDataLength(fileDataLength int32) {
+	(*h).FileDataLength = fileDataLength
 }
 
 func (h *Header) SetTimer(timer int32) {
