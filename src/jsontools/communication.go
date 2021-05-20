@@ -66,6 +66,7 @@ func GenerateSendStage2JsonBytes(jsonParser_old *JsonParser, readyToSend bool, r
 	jsonParser.SetValue("send_stage_2", "MsgType")
 	jsonParser.SetValue(readyToSend, "ReadyToSend")
 	jsonParser.SetValue(divideMethod, "DivideMethod")
+	jsonParser.SetValue(groupNum, "GroupNum")
 	jsonParser.SetValue(receiverPublicKey, "ReceiverPublicKey")
 	jsonParser.SetValue(senderName, "SenderName")
 	jsonParser.SetValue(receiverName, "ReceiverName")
@@ -238,7 +239,7 @@ func GenerateCleanStage2JsonBytes(jsonParser_old *JsonParser) []byte {
 }
 
 // *控制中心*生成清理阶段3的json文件,返回生成的json的bytes
-func GenerateReceiveClean3JsonBytes(jsonParser_old *JsonParser) []byte {
+func GenerateCleanStage3JsonBytes(jsonParser_old *JsonParser) []byte {
 	jsonParser := GenerateNewJsonParser()
 	identification := int32(jsonParser_old.ReadJsonValue("/Identification").(float64))
 	jsonParser.SetValue("clean_stage_3", "MsgType")

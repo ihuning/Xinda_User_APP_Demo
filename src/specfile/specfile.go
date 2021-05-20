@@ -142,7 +142,7 @@ func generateSpecFileFolder(fragmentGroup [][][]byte, zipFilePath string, sender
 				return err
 			}
 			aesKey, nonce, err := aestools.InitAES()
-			paddingSize := int(jsonParser.ReadJsonValue("/GroupInfolist/" + fmt.Sprint(i) + "/SpecFileInfoList/" + fmt.Sprint(j) + "/PaddingSize").(float64))
+			paddingSize := int(jsonParser.ReadJsonValue("/GroupInfoList/" + fmt.Sprint(i) + "/SpecFileInfoList/" + fmt.Sprint(j) + "/PaddingSize").(float64))
 			padding := padding.GeneratePadding(paddingSize)
 			sign, err := rsatools.Sign(bytesCombine(headerBytes, aesKey, nonce, fragmentGroup[i][j]), senderPrivateKey)
 			if err != nil {
@@ -170,8 +170,8 @@ func generateSpecFileFolder(fragmentGroup [][][]byte, zipFilePath string, sender
 			}
 			specFileBytes := bytesCombine(encryptedHeaderBytes, encryptedAesKey, encryptedNonce, encryptedFragmentBytes, encryptedSign, padding)
 			// 把数据交换文件写入文件夹
-			specFileFolder := jsonParser.ReadJsonValue("/GroupInfolist/" + fmt.Sprint(i) + "/SpecFileInfoList/" + fmt.Sprint(j) + "/IFSSName").(string)
-			specFileName := jsonParser.ReadJsonValue("/GroupInfolist/" + fmt.Sprint(i) + "/SpecFileInfoList/" + fmt.Sprint(j) + "/SpecFileName").(string)
+			specFileFolder := jsonParser.ReadJsonValue("/GroupInfoList/" + fmt.Sprint(i) + "/SpecFileInfoList/" + fmt.Sprint(j) + "/IFSSName").(string)
+			specFileName := jsonParser.ReadJsonValue("/GroupInfoList/" + fmt.Sprint(i) + "/SpecFileInfoList/" + fmt.Sprint(j) + "/SpecFileName").(string)
 			filePath := filepath.Join(folderDir, specFileFolder, specFileName)
 			err = filetools.WriteFile(filePath, specFileBytes, 0755)
 			if err != nil {
