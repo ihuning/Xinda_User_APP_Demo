@@ -152,6 +152,7 @@ func GenerateSendStage6JsonBytes(jsonParser_old *JsonParser) []byte {
 func GenerateReceiveStage1JsonBytes(jsonParser_old *JsonParser, senderPublicKey string) []byte {
 	jsonParser := GenerateNewJsonParser()
 	divideMethod := int(jsonParser_old.ReadJsonValue("/DivideMethod").(float64))
+	groupNum := int(jsonParser_old.ReadJsonValue("/GroupNum").(float64))
 	senderName := jsonParser_old.ReadJsonValue("/SenderName").(string)
 	receiverName := jsonParser_old.ReadJsonValue("/ReceiverName").(string)
 	fileName := jsonParser_old.ReadJsonValue("/FileName").(string)
@@ -161,6 +162,7 @@ func GenerateReceiveStage1JsonBytes(jsonParser_old *JsonParser, senderPublicKey 
 	IFSSInfoList := jsonParser_old.ReadJsonValue("/IFSSInfoList")
 	jsonParser.SetValue("receive_stage_1", "MsgType")
 	jsonParser.SetValue(divideMethod, "DivideMethod")
+	jsonParser.SetValue(groupNum, "GroupNum")
 	jsonParser.SetValue(senderPublicKey, "SenderPublicKey")
 	jsonParser.SetValue(senderName, "SenderName")
 	jsonParser.SetValue(receiverName, "ReceiverName")

@@ -241,18 +241,23 @@ func generateFragmentSN_UnencryptedFragmentBytesMap(groupSN_GroupInfoMap map[int
 	if err != nil {
 		return nil, err
 	}
+	if int(jsonParser.ReadJsonValue("/GroupNum").(float64)) != len(groupSN_GroupInfoMap) {
+		fmt.Println("无法还原,存在分组丢失")
+		err = fmt.Errorf("无法还原,存在分组丢失")
+		return nil, err
+	}
 	for groupSN := range groupSN_GroupInfoMap {
 		groupInfo := groupSN_GroupInfoMap[groupSN]
 		acturalGroupTotal := len(groupInfo.DataFileInfoList)
 		expectedGroupTotal := len(groupInfo.DataFileInfoList[0].Header.GetGroupContent())
 		if expectedGroupTotal > acturalGroupTotal+1 { // 丢失了多个数据分片
-			fmt.Println("丢失了太多分片,无法还原")
-			err = fmt.Errorf("丢失了太多分片,无法还原")
+			fmt.Println("无法还原,组内太多分片丢失")
+			err = fmt.Errorf("无法还原,组内太多分片丢失")
 			return nil, err
 		} else if expectedGroupTotal == acturalGroupTotal+1 { // 组里面只丢失了一个数据分片
 			if (groupInfo.RedundanceFileInfo == FileInfo{}) {
-				fmt.Println("丢失了冗余分片,无法还原")
-				err = fmt.Errorf("丢失了冗余分片,无法还原")
+				fmt.Println("无法还原,组内数据分片丢失且冗余分片丢失")
+				err = fmt.Errorf("无法还原,组内数据分片丢失且冗余分片丢失")
 				return nil, err
 			} else if (groupInfo.RedundanceFileInfo != FileInfo{}) { // 冗余分片还在
 				// 找到是哪个分片丢了
