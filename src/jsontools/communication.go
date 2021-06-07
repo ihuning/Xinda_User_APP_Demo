@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"math"
 	"math/big"
+	"os"
 )
 
 // *通信方*生成身份注册阶段1的json文件,返回生成的json的bytes
@@ -36,17 +37,19 @@ func GenerateRegisterStage3JsonBytes(jsonParser_old *JsonParser) []byte {
 	return jsonParser.GenerateJsonBytes()
 }
 
-// *发送方*生成发送阶段1的json文件,返回生成的json的bytes
-func GenerateSendStage1JsonBytes(divideMethod, groupNum int, senderName, receiverName, fileName string, identification, fileDataLength, timer int) []byte {
+// *前端*生成的发送阶段配置json文件,返回生成的json的bytes
+func GenerateSendStrategyJsonBytes(divideMethod, groupNum int, senderName, receiverName, srcFilePath string, timer int) []byte {
 	jsonParser := GenerateNewJsonParser()
-	jsonParser.SetValue("send_stage_1", "MsgType")
+	fileInfo, _ := os.Stat(srcFilePath)
+	identification, _ := rand.Int(rand.Reader, big.NewInt(2147483647))
+    jsonParser.SetValue("send_strategy", "MsgType")
 	jsonParser.SetValue(divideMethod, "DivideMethod")
 	jsonParser.SetValue(groupNum, "GroupNum")
 	jsonParser.SetValue(senderName, "SenderName")
 	jsonParser.SetValue(receiverName, "ReceiverName")
-	jsonParser.SetValue(fileName, "FileName")
-	jsonParser.SetValue(identification, "Identification")
-	jsonParser.SetValue(fileDataLength, "FileDataLength")
+	jsonParser.SetValue(srcFilePath, "SrcFilePath")
+	jsonParser.SetValue(identification.Int64(), "Identification")
+	jsonParser.SetValue(fileInfo.Size(), "FileDataLength")
 	jsonParser.SetValue(timer, "Timer")
 	return jsonParser.GenerateJsonBytes()
 }

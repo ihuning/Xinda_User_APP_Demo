@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
+	"encoding/hex"
 	"encoding/pem"
 	"fmt"
 	"math"
@@ -116,9 +117,24 @@ func bytesToPublicKey(pub []byte) (*rsa.PublicKey, error) {
 	return key, nil
 }
 
+// 将string转为私钥
+func StringToPrivateKey(str string) (*rsa.PrivateKey, error) {
+	return bytesToPrivateKey(str2bytes(str))
+}
+
 // 将string转为公钥
 func StringToPublicKey(str string) (*rsa.PublicKey, error) {
 	return bytesToPublicKey(str2bytes(str))
+}
+
+// 将bytes转为以16进制表示的字符串
+func BytesToHexString(bytes []byte) string {
+	return hex.EncodeToString(bytes)
+}
+
+// 将以16进制表示的字符串转为bytes
+func HexStringToBytes(str string) ([]byte, error) {
+	return hex.DecodeString(str)
 }
 
 // 生成密钥对文件

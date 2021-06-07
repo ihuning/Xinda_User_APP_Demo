@@ -1,8 +1,10 @@
 package filetools
 
 import (
+	"crypto/rand"
 	"fmt"
 	"io/ioutil"
+	"math/big"
 	"os"
 	"path/filepath"
 )
@@ -48,7 +50,12 @@ func ReadFile(filePath string) ([]byte, error) {
 
 // 移动或重命名文件
 func Rename(oldPath, newPath string) error {
-	err := os.Rename(oldPath, newPath)
+	dir, _ := filepath.Split(newPath)
+	err := Mkdir(dir)
+	if err != nil {
+		return err
+	}
+	err = os.Rename(oldPath, newPath)
 	if err != nil {
 		fmt.Println("无法移动或重命名文件", err)
 		return err
@@ -93,6 +100,46 @@ func MoveAllFilesToNewFolder(oldDir, newDir string) error {
 	return err
 }
 
+// 复制文件
+func Copy(oldPath, newPath string) error {
+	dir, _ := filepath.Split(newPath)
+	err := Mkdir(dir)
+	if err != nil {
+		return err
+	}
+	content, err := ioutil.ReadFile(oldPath)
+	if err != nil {
+		fmt.Println("无法在复制过程中读取原文件", err)
+		return err
+	}
+	err = ioutil.WriteFile(newPath, content, 0777)
+	if err != nil {
+		fmt.Println("无法在复制过程中写入新文件", err)
+		return err
+	}
+	return err
+}
+
+// 复制一个文件夹中的所有文件到新的文件夹
+func CopyAllFilesToNewFolder(oldDir, newDir string) error {
+	var err error
+	err = Mkdir(newDir)
+	if err != nil {
+		return err
+	}
+	filePathList, fileNameList, err := GenerateAllFilePathNameListFromFolder(oldDir)
+	if err != nil {
+		return err
+	}
+	for i := 0; i < len(filePathList); i++ {
+		err = Copy(filePathList[i], filepath.Join(newDir, fileNameList[i]))
+		if err != nil {
+			return err
+		}
+	}
+	return err
+}
+
 // 判断路径是否存在
 func IsPathExists(path string) bool {
 	var err error
@@ -117,8 +164,19 @@ func Mkdir(folderDir string) error {
 	return err
 }
 
+// 删除一个文件
+func RmFile(filePath string) error {
+	var err error
+	err = os.Remove(filePath)
+	if err != nil {
+		fmt.Println("无法删除文件", filePath, err)
+		return err
+	}
+	return err
+}
+
 // 删除一个文件夹
-func Rmdir(folderDir string) error {
+func RmDir(folderDir string) error {
 	var err error
 	err = os.RemoveAll(folderDir)
 	if err != nil {
@@ -165,4 +223,21 @@ func GenerateAllFilePathNameListFromFolder(folderDir string) ([]string, []string
 		fileNameList = append(fileNameList, file.Name())
 	}
 	return filePathList, fileNameList, err
+}
+
+// 将多个路径组成的列表拆分为多个列表
+func DivideDirListToGroup(dirList []string, groupNum int) [][]string {
+	random := func(max int) int {
+		n, _ := rand.Int(rand.Reader, big.NewInt(int64(max)))
+		return int(n.Int64())
+	}
+	var DirGroup [][]string
+	for i := 0; i < groupNum; i++ {
+		DirGroup = append(DirGroup, []string{})
+	}
+	for _, dir := range dirList {
+		randomNum := random(groupNum)
+		DirGroup[randomNum] = append(DirGroup[randomNum], dir)
+	}
+	return DirGroup
 }

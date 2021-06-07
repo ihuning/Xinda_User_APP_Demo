@@ -2,24 +2,27 @@ package emailtools
 
 import (
 	"fmt"
-	"net/smtp"
 	"mime"
+	"net/smtp"
 	"path/filepath"
-	// "time"
+	"xindauserbackground/src/crypto/rsatools"
+	"runtime/debug"
+	"bytes"
 	"io"
 	"io/ioutil"
 	"strings"
-	"bytes"
+
 	// "github.com/emersion/go-message/textproto"
 	// "log"
 	"xindauserbackground/src/filetools"
 	// "encoding/base64"
-	"github.com/emersion/go-imap"
 	"github.com/axgle/mahonia"
-	IMAPClient "github.com/emersion/go-imap/client"
+	"github.com/emersion/go-imap"
+	ImapClient "github.com/emersion/go-imap/client"
+
 	// "github.com/emersion/go-message"
-	"github.com/jordan-wright/email"
 	"github.com/emersion/go-message/mail"
+	"github.com/jordan-wright/email"
 )
 
 type SMTPClient struct {
@@ -28,14 +31,21 @@ type SMTPClient struct {
 	SMTPAuth   smtp.Auth
 }
 
-type Client struct {
-	SMTPClient *SMTPClient
-	IMAPClient *IMAPClient.Client
+type IMAPClient struct {
+	IMAPClient *ImapClient.Client
 }
 
-// 建立和邮箱的连接
-func ConnectToServer(smtpServer, imapServer, emailAddr, password string) (*Client, error) {
-	imapClient, err := IMAPClient.DialTLS(imapServer, nil)
+// 建立和SMTP的连接
+func ConnectToSMTPServer(smtpServer, emailAddr, password string) (*SMTPClient, error) {
+	// PlainAuth 身份认证机制 第一个参数通常为空，第二个是发送方邮箱，第三个是发送方密码/密钥，第四个是发送发邮件服务器地址 此处不包括端口号
+	smtpAuth := smtp.PlainAuth("", emailAddr, password, strings.Split(smtpServer, ":")[0])
+	smtpClient := &SMTPClient{emailAddr, smtpServer, smtpAuth}
+	return smtpClient, nil
+}
+
+// 建立和IMAP的连接
+func ConnectToIMAPServer(imapServer, emailAddr, password string) (*IMAPClient, error) {
+	imapClient, err := ImapClient.DialTLS(imapServer, nil)
 	if err != nil {
 		fmt.Println("无法与邮箱IMAP服务器建立TLS连接")
 		return nil, err
@@ -45,53 +55,67 @@ func ConnectToServer(smtpServer, imapServer, emailAddr, password string) (*Clien
 		fmt.Println("无法登录邮箱IMAP服务器")
 		return nil, err
 	}
-	// PlainAuth 身份认证机制 第一个参数通常为空，第二个是发送方邮箱，第三个是发送方密码/密钥，第四个是发送发邮件服务器地址 此处不包括端口号
-	smtpAuth := smtp.PlainAuth("", emailAddr, password, strings.Split(smtpServer, ":")[0])
-	smtpClient := &SMTPClient{emailAddr, smtpServer, smtpAuth}
-	client := &Client{
-		SMTPClient: smtpClient,
-		IMAPClient: imapClient,
-	}
-	return client, nil
+	return &IMAPClient{imapClient}, nil
 }
 
-// 断开和邮箱的连接
-func (c *Client) Close() error {
+// 断开和IMAP的连接
+func (c *IMAPClient) Close() error {
 	return c.IMAPClient.Logout()
 }
 
-// 发送一封带附件的邮件
-func (c *Client) SendEmail(receiverAddr, attachmentPath string) error {
+// 发送一封带主题和附件的邮件
+func (c *SMTPClient) SendEmail(receiverAddr, text, attachmentPath string) error {
 	var err error
 	//新建一封邮件
 	e := email.NewEmail()
-	e.From = c.SMTPClient.EmailAddr
+	e.From = c.EmailAddr
 	e.To = []string{receiverAddr}
-	e.Subject = "Hello Go Attach"
-	e.Text = []byte("Text Body is, of course, supported!")
-	e.HTML = []byte("<h1>Fancy HTML is supported, too!</h1>")
+	_, subject := filepath.Split(attachmentPath)
+	e.Subject = subject
+	e.Text = []byte(text)
+	// e.HTML = []byte("<h1>Fancy HTML is supported, too!</h1>")
 	_, err = e.AttachFile(attachmentPath)
 	if err != nil {
 		fmt.Println("无法为邮件添加附件", err)
 		return err
 	}
 	//PlainAuth 身份认证机制 第一个参数通常为空，第二个是发送方邮箱，第三个是发送方密码/密钥，第四个是发送发邮件服务器地址 此处不包括端口号
-	err = e.Send(c.SMTPClient.SMTPServer, c.SMTPClient.SMTPAuth)
+	err = e.Send(c.SMTPServer, c.SMTPAuth)
 	if err != nil {
-		fmt.Println("send email fail:", err)
+		fmt.Println("无法发送邮件", err)
 		return err
 	}
-	fmt.Println("send email success!")
+	fmt.Println(c.EmailAddr, "成功发送邮件", subject, "给收件人", receiverAddr)
 	return nil
 }
 
+// 输出当前邮箱中所有的boxs
+func (c *IMAPClient) PrintBoxList() {
+	mailboxes := make(chan *imap.MailboxInfo, 10)
+	done := make(chan error, 1)
+	go func() {
+		done <- c.IMAPClient.List("", "*", mailboxes)
+	}()
+	fmt.Println("Mailboxes:")
+	for m := range mailboxes {
+		fmt.Println("* " + m.Name)
+	}
+}
+
 // 获取当前邮箱收件箱中完整的邮件列表
-func (c *Client) GetEmailList() (*imap.SeqSet, error) {
+func (c *IMAPClient) GetEmailList(boxType string) (*imap.SeqSet, error) {
+	defer func() {
+		if err := recover(); err != nil {
+			fmt.Println("got error: ", err)
+			debug.PrintStack()
+		}
+	}()
 	var err error
 	// 选择收件箱
-	mbox, err := c.IMAPClient.Select("INBOX", false)
+	mbox, err := c.IMAPClient.Select(boxType, false)
 	if err != nil {
-		fmt.Println("无法选择收件箱", err)
+		fmt.Println("无法选择该信箱", err)
+		return nil, err
 	}
 	emailList := new(imap.SeqSet)
 	emailList.AddRange(1, mbox.Messages)
@@ -99,8 +123,19 @@ func (c *Client) GetEmailList() (*imap.SeqSet, error) {
 }
 
 // 接收邮件列表中的所有邮件,并保存附件
-func (c *Client) ReceiveEmail(emailList *imap.SeqSet, saveDir string) error {
+func (c *IMAPClient) ReceiveEmail(userPrivateKeyPath string, emailList *imap.SeqSet, saveDir string) error {
 	var err error
+	defer func() {
+		if err := recover(); err != nil {
+			fmt.Println("got error: ", err)
+			debug.PrintStack()
+		}
+	}()
+	// 私钥用来解密该邮件的最终接收方是谁
+	userPrivateKey, err := rsatools.ReadPrivateKeyFile(userPrivateKeyPath)
+	if err != nil {
+		return err
+	}
 	// 获取邮件的message body
 	var section imap.BodySectionName
 	items := []imap.FetchItem{section.FetchItem()}
@@ -114,8 +149,11 @@ func (c *Client) ReceiveEmail(emailList *imap.SeqSet, saveDir string) error {
 		// 创建一个mail reader
 		mr, err := mail.CreateReader(r)
 		if err != nil {
-			fmt.Println(err)
+			fmt.Println("无法创建mail reader", err)
+			return err
 		}
+		var receiverName, fileName string
+		var fileContent []byte
 		// 输出邮件头的信息
 		// header := mr.Header
 		// if date, err := header.Date(); err == nil {
@@ -135,39 +173,60 @@ func (c *Client) ReceiveEmail(emailList *imap.SeqSet, saveDir string) error {
 			p, err := mr.NextPart()
 			if err == io.EOF {
 				break
+			} else if err != nil {
+				fmt.Println("无法遍历MIME", err)
 			}
-			// } else if err != nil {
-			// 	fmt.Println("无法遍历MIME", err)
-			// }
 			switch h := p.Header.(type) {
-			// case *mail.InlineHeader:
-			// 	// 邮件正文(plain-text or HTML)
-			// 	b, _ := ioutil.ReadAll(p.Body)
-			// 	fmt.Println("Got text:", string(b))
+			case *mail.InlineHeader:
+				// 邮件正文(plain-text or HTML)
+				body, _ := ioutil.ReadAll(p.Body)
+				bodyHexBytes, err := rsatools.HexStringToBytes(string(body))
+				if err != nil {
+					return err
+				}
+				decryptedReceiverNameBytes, err := rsatools.DecryptWithPrivateKey(bodyHexBytes, userPrivateKey)
+				if err != nil {
+					return err
+				}
+				receiverName = string(decryptedReceiverNameBytes)
 			case *mail.AttachmentHeader:
 				// 附件
-				encodedFileName, _ := h.Filename()
-				dec := decoder()
-				fileName, err := dec.Decode(encodedFileName)
-				b, err := ioutil.ReadAll(p.Body)
+				fileName, err = h.Filename()
 				if err != nil {
-					fmt.Println("无法读取附件", err)
+					fmt.Println("无法读取附件的文件名", err)
 					return err
 				}
-				filePath := filepath.Join(saveDir, fileName)
-				err = filetools.WriteFile(filePath, b, 0777)
+				fileContent, err = ioutil.ReadAll(p.Body)
 				if err != nil {
+					fmt.Println("无法读取附件的内容", err)
 					return err
 				}
 			}
+		}
+		// 保存文件
+		filePath := filepath.Join(saveDir, receiverName, fileName)
+		err = filetools.WriteFile(filePath, fileContent, 0777)
+		if err != nil {
+			return err
 		}
 	}
 	return err
 }
 
 // 删除邮件列表中的所有邮件
-func (c *Client) DeleteEmail(emailList *imap.SeqSet) error {
+func (c *IMAPClient) DeleteEmail(emailList *imap.SeqSet) error {
+	defer func() {
+		if err := recover(); err != nil {
+			fmt.Println("got error: ", err)
+			debug.PrintStack()
+		}
+	}()
+	// defer c.Close()
 	var err error
+	// 如果本来就为空
+	if emailList.Set[0].Stop == 0 {
+		return err
+	}
 	// 先给邮件置删除标志位
 	item := imap.FormatFlagsOp(imap.AddFlags, true)
 	flags := []interface{}{imap.DeletedFlag}
