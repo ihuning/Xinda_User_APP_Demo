@@ -1,6 +1,7 @@
 package ifsstools
 
 import (
+	"fmt"
 	"path/filepath"
 	"sync"
 	"xindauserbackground/src/crypto/rsatools"
@@ -24,7 +25,6 @@ func UploadToIFSS(sendFolderDir string, ownAccountListJsonParser *jsontools.Json
 	}
 	filePathList, _, _ := filetools.GenerateSpecFilePathNameListFromFolder(sendFolderDir)
 	filePathGroup := filetools.DivideDirListToGroup(filePathList, len(ifssNameList))
-	var wg sync.WaitGroup // 信号量
 	uploadGoroutine := func(wg *sync.WaitGroup, ifssName string, filePathList []string) {
 		ifssFolderDir := filepath.Join(sendFolderDir, ifssName)
 		// 生成一个新的文件夹,使用该IFSS账号的所有文件都储存在这个文件夹中
@@ -32,7 +32,7 @@ func UploadToIFSS(sendFolderDir string, ownAccountListJsonParser *jsontools.Json
 		if err != nil {
 			return
 		}
-		zipGoroutine := func(wgZip *sync.WaitGroup, filePath string) {
+		for _, filePath := range filePathList {
 			_, fileName := filepath.Split(filePath)
 			// 将数据交换文件移动到新的文件夹
 			tempFolderDir := filepath.Join(ifssFolderDir, fileName + "_ready_to_zip")
@@ -57,14 +57,7 @@ func UploadToIFSS(sendFolderDir string, ownAccountListJsonParser *jsontools.Json
 			if err != nil {
 				return
 			}
-			wgZip.Done()
 		}
-		var wgZip sync.WaitGroup
-		wgZip.Add(len(filePathList))
-		for _, filePath := range filePathList {
-			zipGoroutine(&wgZip, filePath)
-		}
-		wgZip.Wait()
 		// 使用IFSS账号将本地文件上传到IFSS平台
 		for _, children := range ownAccountListJsonParser.GetAllChildren("OwnAccountList") {
 			if children.ReadJsonValue("/IFSSName").(string) == ifssName {
@@ -99,6 +92,7 @@ func UploadToIFSS(sendFolderDir string, ownAccountListJsonParser *jsontools.Json
 		}
 		wg.Done()
 	}
+	var wg sync.WaitGroup // 信号量
 	wg.Add(len(filePathGroup))
 	for i, filePathList := range filePathGroup {	
 		ifssName := ifssNameList[i]	
@@ -115,10 +109,10 @@ func DownloadFromIFSS(userPrivateKeyPath string, ownAccountListJsonParser *jsont
 	// identity := ownAccountListJsonParser.ReadJsonValue("/Identity").(string)
 	var saveDir string // 如果身份是ap,则将下载的文件存储在以[接收者]命名的文件夹中;如果身份是接收者,则存储在以[Identification]命名的文件夹中
 	type void struct{}
-	var member void
+	var voidMember void
 	saveDirListSet := make(map[string]void) // 为了去重
 	var saveDirList []string
-	for _, children := range ownAccountListJsonParser.GetAllChildren("OwnAccountList") {
+	downloadGoroutine := func(wg *sync.WaitGroup, children *jsontools.JsonParser) {
 		ifssName := children.ReadJsonValue("/IFSSName").(string)
 		ifssDownloadDir := filepath.Join(receiveDir, ifssName)
 		ifssType := children.ReadJsonValue("/IFSSType").(string)
@@ -130,7 +124,7 @@ func DownloadFromIFSS(userPrivateKeyPath string, ownAccountListJsonParser *jsont
 			g := gittools.NewGitClient(ifssURL, ifssDownloadDir, ifssUserName, ifssPassword)
 			err = g.CloneRepository()
 			if err != nil {
-				return nil, err
+				return
 			}
 		case "webdav":
 			ifssURL := children.ReadJsonValue("/IFSSURL").(string)
@@ -139,50 +133,59 @@ func DownloadFromIFSS(userPrivateKeyPath string, ownAccountListJsonParser *jsont
 			w := webdavtools.NewWebdavClient(ifssURL, ifssDownloadDir, ifssUserName, ifssPassword)
 			err = w.DownloadAllFilesToFolder()
 			if err != nil {
-				return nil, err
+				return
 			}
 		default:
 			panic("IFSS类型错误")
 		}
-		filePathList, fileNameList, _ := filetools.GenerateSpecFilePathNameListFromFolder(ifssDownloadDir)
-		for i, filePath := range filePathList {
-			unzipFolderDir := filepath.Join(ifssDownloadDir, fileNameList[i] + "_ziptemp")
+		filePathList, _, _ := filetools.GenerateSpecFilePathNameListFromFolder(ifssDownloadDir)
+		for _, filePath := range filePathList {
+			_, fileName := filepath.Split(filePath)
+			unzipFolderDir := filepath.Join(ifssDownloadDir, fileName + "_ziptemp")
 			err = filetools.Mkdir(unzipFolderDir)
 			if err != nil {
-				return nil, err
+				return
 			}
 			_, err = ziptools.UnzipFile(filePath, unzipFolderDir)
 			if err != nil {
-				return nil, err
+				return
 			}
 			// 找到配置文件,并解出接收方是谁
-			specFilePath := filepath.Join(unzipFolderDir, fileNameList[i])
-			infoFilePath := filepath.Join(unzipFolderDir, fileNameList[i]+"_")
+			specFilePath := filepath.Join(unzipFolderDir, fileName)
+			infoFilePath := filepath.Join(unzipFolderDir, fileName+"_")
 			encryptedReceiverNameBytes, err := filetools.ReadFile(infoFilePath)
 			if err != nil {
-				return nil, err
+				return
 			}
 			userPrivateKey, err := rsatools.ReadPrivateKeyFile(userPrivateKeyPath)
 			if err != nil {
-				return nil, err
+				return
 			}
 			receiverNameBytes, err := rsatools.DecryptWithPrivateKey(encryptedReceiverNameBytes, userPrivateKey)
 			if err != nil {
-				return nil, err
+				return
 			}
 			// 数据交换文件最终存储的文件夹位置
 			saveDir = filepath.Join(receiveDir, string(receiverNameBytes)) // 如果是接入节点,使用用户名命名数据交换文件文件夹
-			saveDirListSet[saveDir] = member	
-			err = filetools.Rename(specFilePath, filepath.Join(saveDir, fileNameList[i]))
+			saveDirListSet[saveDir] = voidMember	
+			err = filetools.Rename(specFilePath, filepath.Join(saveDir, fileName))
 			if err != nil {
-				return saveDirList, err
+				return
 			}			
 			err = filetools.RmDir(unzipFolderDir)
 			if err != nil {
-				return saveDirList, err
+				return
 			}
 		}
+		wg.Done()
 	}
+	ownAccountParserList := ownAccountListJsonParser.GetAllChildren("OwnAccountList")
+	var wg sync.WaitGroup
+	wg.Add(len(ownAccountParserList))
+	for _, children := range ownAccountParserList {
+		go downloadGoroutine(&wg, children)
+	}
+	wg.Wait()
 	for key := range saveDirListSet {
 		saveDirList = append(saveDirList, key) // 利用set去重
 	}
@@ -196,10 +199,10 @@ func CleanIFSS(ownAccountListJsonParser *jsontools.JsonParser, receiveDir string
 		ifssName := children.ReadJsonValue("/IFSSName").(string)
 		ifssDownloadDir := filepath.Join(receiveDir, ifssName)
 		ifssType := children.ReadJsonValue("/IFSSType").(string)
+		ifssURL := children.ReadJsonValue("/IFSSURL").(string)
 		// 删除在线记录
 		switch ifssType {
 		case "git":
-			ifssURL := children.ReadJsonValue("/IFSSURL").(string)
 			ifssUserName := children.ReadJsonValue("/IFSSUserName").(string)
 			ifssPassword := children.ReadJsonValue("/IFSSUserPassword").(string)
 			g := gittools.NewGitClient(ifssURL, ifssDownloadDir, ifssUserName, ifssPassword)
@@ -208,7 +211,6 @@ func CleanIFSS(ownAccountListJsonParser *jsontools.JsonParser, receiveDir string
 				return err
 			}
 		case "webdav":
-			ifssURL := children.ReadJsonValue("/IFSSURL").(string)
 			ifssUserName := children.ReadJsonValue("/IFSSUserName").(string)
 			ifssPassword := children.ReadJsonValue("/IFSSUserPassword").(string)
 			w := webdavtools.NewWebdavClient(ifssURL, ifssDownloadDir, ifssUserName, ifssPassword)
@@ -219,6 +221,7 @@ func CleanIFSS(ownAccountListJsonParser *jsontools.JsonParser, receiveDir string
 		default:
 			panic("IFSS类型错误")
 		}
+		fmt.Println("已经成功清除在线仓库", ifssURL, "中的内容")
 		// 删除本地记录
 		err = filetools.RmDir(ifssDownloadDir)
 	}
