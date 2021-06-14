@@ -98,22 +98,22 @@ func RestoreByFragmentList(filePath string, fragmentList [][]byte) error {
 				setBit(&plaintext[j], bit, flag)
 			}
 		}
-		// wg.Done()
+		wg.Done()
 	}
 	var wg sync.WaitGroup // 信号量
 	switch method {
 	case FRAGMNETS_2:
+		wg.Add(2)
 		combineToPlaintext(&wg, []uint8{1, 3, 5, 7}, &fragmentList[0])
-		combineToPlaintext(&wg, []uint8{0, 2, 4, 6}, &fragmentList[1])
-		// wg.Add(2)
+		combineToPlaintext(&wg, []uint8{0, 2, 4, 6}, &fragmentList[1])		
 	case FRAGMNETS_4:
+		wg.Add(4)
 		combineToPlaintext(&wg, []uint8{3, 7}, &fragmentList[0])
 		combineToPlaintext(&wg, []uint8{2, 6}, &fragmentList[1])
 		combineToPlaintext(&wg, []uint8{1, 5}, &fragmentList[2])
 		combineToPlaintext(&wg, []uint8{0, 4}, &fragmentList[3])
-		wg.Add(4)
-		// wg.Add(2)
 	case FRAGMNETS_8:
+		wg.Add(8)
 		combineToPlaintext(&wg, []uint8{7}, &fragmentList[0])
 		combineToPlaintext(&wg, []uint8{6}, &fragmentList[1])
 		combineToPlaintext(&wg, []uint8{5}, &fragmentList[2])
@@ -122,11 +122,10 @@ func RestoreByFragmentList(filePath string, fragmentList [][]byte) error {
 		combineToPlaintext(&wg, []uint8{2}, &fragmentList[5])
 		combineToPlaintext(&wg, []uint8{1}, &fragmentList[6])
 		combineToPlaintext(&wg, []uint8{0}, &fragmentList[7])
-		// wg.Add(8)
 	default:
 		panic("分片数量不合法")
 	}
-	// wg.Wait()
+	wg.Wait()
 	err = filetools.WriteFile(filePath, plaintext, 0777)
 	return err
 }
