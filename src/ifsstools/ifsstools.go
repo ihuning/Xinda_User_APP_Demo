@@ -2,6 +2,7 @@ package ifsstools
 
 import (
 	"path/filepath"
+	"sync"
 	"xindauserbackground/src/crypto/rsatools"
 	"xindauserbackground/src/filetools"
 	"xindauserbackground/src/ifsstools/gittools"
@@ -23,40 +24,47 @@ func UploadToIFSS(sendFolderDir string, ownAccountListJsonParser *jsontools.Json
 	}
 	filePathList, _, _ := filetools.GenerateSpecFilePathNameListFromFolder(sendFolderDir)
 	filePathGroup := filetools.DivideDirListToGroup(filePathList, len(ifssNameList))
-	for i, filePathList := range filePathGroup {
-		ifssName := ifssNameList[i]
+	var wg sync.WaitGroup // 信号量
+	uploadGoroutine := func(wg *sync.WaitGroup, ifssName string, filePathList []string) {
 		ifssFolderDir := filepath.Join(sendFolderDir, ifssName)
 		// 生成一个新的文件夹,使用该IFSS账号的所有文件都储存在这个文件夹中
 		err = filetools.Mkdir(ifssFolderDir)
 		if err != nil {
-			return err
+			return
 		}
-		for _, filePath := range filePathList {
+		zipGoroutine := func(wgZip *sync.WaitGroup, filePath string) {
 			_, fileName := filepath.Split(filePath)
 			// 将数据交换文件移动到新的文件夹
-			tempFolderDir := filepath.Join(ifssFolderDir, "ready_to_zip")
+			tempFolderDir := filepath.Join(ifssFolderDir, fileName + "_ready_to_zip")
 			specFilePath := filepath.Join(tempFolderDir, fileName)
 			filetools.Rename(filePath, specFilePath)
 			encryptedReceiverName, err := rsatools.EncryptWithPublicKey([]byte(receiverName), neighborPublicKey)
 			if err != nil {
-				return err
+				return
 			}
 			infoFilePath := filepath.Join(tempFolderDir, fileName + "_")
 			err = filetools.WriteFile(infoFilePath, encryptedReceiverName, 0777)
 			if err != nil {
-				return err
+				return
 			}
 			tempFilePathList := append([]string{}, specFilePath, infoFilePath)
 			zipFilePath := filepath.Join(ifssFolderDir, fileName)
 			err = ziptools.ZipFiles(tempFilePathList, zipFilePath)
 			if err != nil {
-				return err
+				return
 			}
 			err = filetools.RmDir(tempFolderDir)
 			if err != nil {
-				return err
+				return
 			}
+			wgZip.Done()
 		}
+		var wgZip sync.WaitGroup
+		wgZip.Add(len(filePathList))
+		for _, filePath := range filePathList {
+			zipGoroutine(&wgZip, filePath)
+		}
+		wgZip.Wait()
 		// 使用IFSS账号将本地文件上传到IFSS平台
 		for _, children := range ownAccountListJsonParser.GetAllChildren("OwnAccountList") {
 			if children.ReadJsonValue("/IFSSName").(string) == ifssName {
@@ -69,11 +77,11 @@ func UploadToIFSS(sendFolderDir string, ownAccountListJsonParser *jsontools.Json
 					g := gittools.NewGitClient(ifssURL, ifssFolderDir, ifssUserName, ifssPassword)
 					err = g.CloneRepository()
 					if err != nil {
-						return err
+						return
 					}
 					err = g.PushToRepository()
 					if err != nil {
-						return err
+						return
 					}
 				case "webdav":
 					ifssURL := children.ReadJsonValue("/IFSSURL").(string)
@@ -82,14 +90,21 @@ func UploadToIFSS(sendFolderDir string, ownAccountListJsonParser *jsontools.Json
 					w := webdavtools.NewWebdavClient(ifssURL, ifssFolderDir, ifssUserName, ifssPassword)
 					err = w.UploadAllFilesFromFolder()
 					if err != nil {
-						return err
+						return
 					}
 				default:
 					panic("IFSS类型错误")
 				}
 			}
 		}
+		wg.Done()
 	}
+	wg.Add(len(filePathGroup))
+	for i, filePathList := range filePathGroup {	
+		ifssName := ifssNameList[i]	
+		go uploadGoroutine(&wg, ifssName, filePathList)
+	}
+	wg.Wait()
 	err = filetools.RmDir(sendFolderDir) // 删除本地文件,销毁上传记录
 	return err
 }
