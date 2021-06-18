@@ -374,13 +374,13 @@ func generateSortedFragmentBytesList(fileSaveDir string, filePathList []string, 
 	for fragmentSN := range fragmentSN_UnencryptedFragmentBytesMap {
 		fragmentSNList = append(fragmentSNList, fragmentSN)
 	}
-	// // 判断分片数量够不够header里面的DivideMethod的数量,不是的话没法还原
-	// divideMethod := int(jsonParser.ReadJsonValue("/DivideMethod").(float64))
-	// if len(fragmentSNList) != divideMethod {
-	// 	err = fmt.Errorf("收到的分片数量不够")
-	// 	fmt.Println("无法还原出原文件", err)
-	// 	return nil, "", err
-	// }
+	// 判断分片数量够不够header里面的DivideMethod的数量,不是的话没法还原
+	divideMethod := int(groupSN_GroupInfoMap[0].DataFileInfoList[0].Header.GetDivideMethod())
+	if len(fragmentSNList) != divideMethod {
+		err = fmt.Errorf("收到的分片数量不够")
+		fmt.Println("无法还原出原文件", err)
+		return nil, "", err
+	}
 	// 给fragmentSN排序，从小到大
 	sort.Sort(sort.IntSlice(fragmentSNList))
 	// 生成按fragmentSN排序好的FragmentBytesList
