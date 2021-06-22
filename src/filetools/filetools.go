@@ -140,6 +140,15 @@ func CopyAllFilesToNewFolder(oldDir, newDir string) error {
 	return err
 }
 
+// 判断文件夹是否为空(即使包含.开头的隐藏文件也算为空)
+func IsFolderEmpty(dir string) bool {
+	filePathList, _, _ := GenerateUnhiddenFilePathNameListFromFolder(dir)
+	if len(filePathList) != 0 {
+		return false
+	}
+	return true
+}
+
 // 判断路径是否存在
 func IsPathExists(path string) bool {
 	var err error
@@ -155,7 +164,7 @@ func Mkdir(folderDir string) error {
 	var err error
 	isFolderExist := IsPathExists(folderDir)
 	if isFolderExist == false {
-		err := os.Mkdir(folderDir, 0755)
+		err := os.MkdirAll(folderDir, 0755)
 		if err != nil {
 			fmt.Println("无法创建文件夹", folderDir, err)
 			return err
@@ -186,8 +195,29 @@ func RmDir(folderDir string) error {
 	return err
 }
 
+// 读取文件夹下的所有文件夹(排除.开头的隐藏文件夹),并返回路径列表和文件夹名列表
+func GenerateUnhiddenFolderDirNameListFromFolder(folderDir string) ([]string, []string, error) {
+	var err error
+	folderList, err := ioutil.ReadDir(folderDir) //读取目录下文件
+	if err != nil {
+		fmt.Println("无法读取文件夹", folderDir, err)
+		return nil, nil, err
+	}
+	var folderPathList []string
+	var folderNameList []string
+	for _, folder := range folderList {
+		if folder.Name()[0] == '.' {
+			continue
+		}
+		folderPath := filepath.Join(folderDir, folder.Name())
+		folderPathList = append(folderPathList, folderPath)
+		folderNameList = append(folderNameList, folder.Name())
+	}
+	return folderPathList, folderNameList, err
+}
+
 // 读取文件夹下的所有数据交换文件(排除文件夹和.开头的隐藏文件),并返回路径列表和文件名列表
-func GenerateSpecFilePathNameListFromFolder(folderDir string) ([]string, []string, error) {
+func GenerateUnhiddenFilePathNameListFromFolder(folderDir string) ([]string, []string, error) {
 	var err error
 	fileList, err := ioutil.ReadDir(folderDir) //读取目录下文件
 	if err != nil {

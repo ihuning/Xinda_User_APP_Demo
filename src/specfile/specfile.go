@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"xindauserbackground/src/crypto/aestools"
 	"xindauserbackground/src/crypto/rsatools"
 	"xindauserbackground/src/filetools"
@@ -245,14 +246,14 @@ func generateFragmentSN_UnencryptedFragmentBytesMap(groupSN_GroupInfoMap map[int
 	if err != nil {
 		return nil, err
 	}
-	// if int(jsonParser.ReadJsonValue("/GroupNum").(float64)) != len(groupSN_GroupInfoMap) {
-	// 	fmt.Println("无法还原,存在分组丢失")
-	// 	err = fmt.Errorf("无法还原,存在分组丢失")
-	// 	return nil, err
-	// }
 	for groupSN := range groupSN_GroupInfoMap {
 		groupInfo := groupSN_GroupInfoMap[groupSN]
 		acturalGroupTotal := len(groupInfo.DataFileInfoList)
+		if acturalGroupTotal == 0 {
+			fmt.Println("无法获取足够的分片分组信息")
+			err = fmt.Errorf("无法获取足够的分片分组信息")
+			return nil, err
+		}
 		expectedGroupTotal := len(groupInfo.DataFileInfoList[0].Header.GetGroupContent())
 		if expectedGroupTotal > acturalGroupTotal+1 { // 丢失了多个数据分片
 			fmt.Println("无法还原,组内太多分片丢失")
@@ -325,7 +326,6 @@ func generateSortedFragmentBytesList(fileSaveDir string, filePathList []string, 
 	var senderPublicKeyString string
 	for _, filePath := range filePathList {
 		f, err := os.Open(filePath)
-		defer f.Close()
 		if err != nil {
 			fmt.Println("无法打开数据交换文件", filePath)
 			return nil, "", err
@@ -333,6 +333,7 @@ func generateSortedFragmentBytesList(fileSaveDir string, filePathList []string, 
 		// 读取头部,并加入map中
 		encryptedHeaderBytes := make([]byte, rsatools.GetCiphertextLength(header.GetHeaderBytesSize()))
 		f.ReadAt(encryptedHeaderBytes, 0) // 将头部读取到headerBytes里面
+		f.Close()
 		unencryptedHeaderBytes, err := rsatools.DecryptWithPrivateKey(encryptedHeaderBytes, receiverPrivateKey)
 		if err != nil {
 			return nil, "", err
@@ -344,8 +345,7 @@ func generateSortedFragmentBytesList(fileSaveDir string, filePathList []string, 
 		senderName := header.GetSenderName()
 		if senderPublicKeyString == "" {
 			for _, children := range userListParser.GetAllChildren("UserList") {
-				name := children.ReadJsonValue("/Name").(string)
-				if name == senderName {
+				if children.ReadJsonValue("/Name").(string) == senderName {
 					senderPublicKeyString = children.ReadJsonValue("/PublicKey").(string)
 					break
 				}
@@ -368,8 +368,12 @@ func generateSortedFragmentBytesList(fileSaveDir string, filePathList []string, 
 		return nil, "", err
 	}
 	// 获得原始传输文件的文件名,并生成文件存储路径
+	if len(groupSN_GroupInfoMap) == 0 {
+		return nil, "", err
+	}
+	identification := strconv.Itoa(int(groupSN_GroupInfoMap[0].DataFileInfoList[0].Header.GetIdentification()))
 	fileName := groupSN_GroupInfoMap[0].DataFileInfoList[0].Header.GetFileName()
-	fileSavePath := filepath.Join(fileSaveDir, fileName)
+	fileSavePath := filepath.Join(fileSaveDir, identification, fileName)
 	var fragmentSNList []int
 	for fragmentSN := range fragmentSN_UnencryptedFragmentBytesMap {
 		fragmentSNList = append(fragmentSNList, fragmentSN)
@@ -378,7 +382,7 @@ func generateSortedFragmentBytesList(fileSaveDir string, filePathList []string, 
 	divideMethod := int(groupSN_GroupInfoMap[0].DataFileInfoList[0].Header.GetDivideMethod())
 	if len(fragmentSNList) != divideMethod {
 		err = fmt.Errorf("收到的分片数量不够")
-		fmt.Println("无法还原出原文件", err)
+		fmt.Println("无法根据目前收到的分片还原出原文件", err)
 		return nil, "", err
 	}
 	// 给fragmentSN排序，从小到大
@@ -432,9 +436,10 @@ func GenerateSpecFileFolder(userListJsonPath, senderPrivateKeyFilePath string, s
 }
 
 // 从数据交换文件的文件夹中恢复出要传输的文件,并将文件存储在fileSaveDir中
-func RestoreFromSpecFileFolder(fileSaveDir string, receiverPrivateKeyFilePath string, userListJsonPath string, specFileFoldeDir string) error {
+func RestoreFromSpecFileFolder(fileSaveDir, receiverPrivateKeyFilePath, userListJsonPath, specFileFoldeDir string, task_RecordMap map[string]bool) error {
 	var err error
-	filePathList, _, err := filetools.GenerateSpecFilePathNameListFromFolder(specFileFoldeDir)
+	_, identification := filepath.Split(specFileFoldeDir)
+	filePathList, _, err := filetools.GenerateUnhiddenFilePathNameListFromFolder(specFileFoldeDir)
 	if err != nil {
 		return err
 	}
@@ -446,10 +451,53 @@ func RestoreFromSpecFileFolder(fileSaveDir string, receiverPrivateKeyFilePath st
 	if err != nil {
 		return err
 	}
+	// 还原出来的最终文件的存储位置即为fileSavePath
 	err = fragment.RestoreByFragmentList(fileSavePath, sortedFragmentBytesList)
 	if err != nil {
 		return err
 	}
+	task_RecordMap[identification] = true
 	err = filetools.RmDir(specFileFoldeDir)
+	return err
+}
+
+// 根据identification,将从IFSS收到的文件分到"待还原"文件夹的不同文件夹中
+func DivideToIdentificationList(specFileFolderDir, receiverPrivateKeyFilePath string, restoreFolderDir string, task_RecordMap map[string]bool) error {
+	var err error
+	receiverPrivateKey, err := rsatools.ReadPrivateKeyFile(receiverPrivateKeyFilePath)
+	if err != nil {
+		return err
+	}
+	filePathList, _, err := filetools.GenerateUnhiddenFilePathNameListFromFolder(specFileFolderDir)
+	for _, filePath := range filePathList {
+		f, err := os.Open(filePath)
+		if err != nil {
+			fmt.Println("无法打开数据交换文件", filePath)
+			return err
+		}
+		// 读取头部,并加入map中
+		encryptedHeaderBytes := make([]byte, rsatools.GetCiphertextLength(header.GetHeaderBytesSize()))
+		f.ReadAt(encryptedHeaderBytes, 0) // 将头部读取到headerBytes里面
+		f.Close()
+		unencryptedHeaderBytes, err := rsatools.DecryptWithPrivateKey(encryptedHeaderBytes, receiverPrivateKey)
+		if err != nil {
+			return err
+		}
+		header, err := header.ReadHeaderFromSpecFileBytes(unencryptedHeaderBytes)
+		if err != nil {
+			return err
+		}
+		identification := strconv.Itoa(int(header.GetIdentification()))
+		_, ifExist := task_RecordMap[identification]
+		if !ifExist {
+			_, fileName := filepath.Split(filePath)
+			newDir := filepath.Join(restoreFolderDir, identification, fileName)
+			err = filetools.Mkdir(filepath.Join(restoreFolderDir, identification))
+			if err != nil {
+				return err
+			}
+			filetools.Rename(filePath, newDir)
+		}
+	}
 	return err
 }

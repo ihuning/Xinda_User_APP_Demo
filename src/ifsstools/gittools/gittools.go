@@ -29,6 +29,75 @@ func NewGitClient(url, repoDir, userName, password string) Git {
 	return g
 }
 
+// 将commit的内容push到在线仓库中
+func (g Git) PushToRepository(sendProgress chan string) error {
+	var err error
+	defer func() {
+		if err != nil {
+			fmt.Println("无法push到仓库", err)
+		}
+	}()
+	// commit过程
+	r, err := git.PlainOpen(g.RepoDir)
+	if err != nil {
+		return err
+	}
+	w, err := r.Worktree()
+	if err != nil {
+		return err
+	}
+	_, fileNameList, err := filetools.GenerateUnhiddenFilePathNameListFromFolder(g.RepoDir)
+	if err != nil {
+		return err
+	}
+	for _, fileName := range fileNameList {
+		// 将文件存储到暂存区
+		_, err = w.Add(fileName)
+		if err != nil {
+			return err
+		} // 填写commit信息并commit
+		_, err = w.Commit("", &git.CommitOptions{
+			Author: &object.Signature{},
+		})
+		if err != nil {
+			return err
+		}
+	}
+	// 使用默认选项push
+	err = r.Push(&git.PushOptions{
+		Auth: &http.BasicAuth{
+			Username: g.UserName,
+			Password: g.Password,
+		},
+	})
+	for _, fileName := range fileNameList {
+		if err == nil {
+			sendProgress <- ("数据交换文件" + fileName + "使用git方式成功发送到了" + g.Url + "使用的账户为" + g.UserName)
+		}
+	}
+	return err
+}
+
+// 下载仓库中的最新内容,视情况选择clone或者pull
+func (g Git) DownloadFromRepository() error {
+	var err error
+	if !filetools.IsPathExists(filepath.Join(g.RepoDir, ".git")) {
+		err = g.CloneRepository()
+	} else {
+		err = g.PullFromRepository()
+	}
+	_, fileNameList, err := filetools.GenerateUnhiddenFilePathNameListFromFolder(g.RepoDir)
+	if err == nil {
+		if len(fileNameList) == 0 {
+			fmt.Println("没有在", g.Url, "中检测到需要下载的内容")
+		}
+		for _, fileName := range fileNameList {
+			fmt.Println("数据交换文件", fileName, "从", g.Url, "使用git方式成功下载", "使用的账户为", g.UserName)
+		}
+	}
+	return err
+}
+
 // 将仓库克隆到指定位置
 func (g Git) CloneRepository() error {
 	var err error
@@ -59,60 +128,13 @@ func (g Git) CloneRepository() error {
 			},
 			URL: g.Url,
 		})
-		// 这种方式的目的除了可能是测试clone结果外,还可能是下载数据交换文件的操作,要检查下载了哪些文件.
-		_, fileNameList, err := filetools.GenerateSpecFilePathNameListFromFolder(g.RepoDir)
-		if err == nil {
-			for _, fileName := range fileNameList {
-				fmt.Println("数据交换文件", fileName, "从", g.Url, "使用git方式成功下载", "使用的账户为", g.UserName)
-			}
-		}
-	}
-	return err
-}
-
-// 将commit的内容push到在线仓库中
-func (g Git) PushToRepository() error {
-	var err error
-	defer func() {
-		if err != nil {
-			fmt.Println("无法push到仓库", err)
-		}
-	}()
-	// commit过程
-	r, err := git.PlainOpen(g.RepoDir)
-	if err != nil {
-		return err
-	}
-	w, err := r.Worktree()
-	if err != nil {
-		return err
-	}
-	_, fileNameList, err := filetools.GenerateSpecFilePathNameListFromFolder(g.RepoDir)
-	if err != nil {
-		return err
-	}
-	for _, fileName := range fileNameList {
-		// 将文件存储到暂存区
-		_, err = w.Add(fileName)
-		if err != nil {
-			return err
-		} // 填写commit信息并commit
-		_, err = w.Commit("", &git.CommitOptions{
-			Author: &object.Signature{},
-		})
-		if err != nil {
-			return err
-		}
-		// 使用默认选项push
-		err = r.Push(&git.PushOptions{
-			Auth: &http.BasicAuth{
-				Username: g.UserName,
-				Password: g.Password,
-			},
-		})
-		if err == nil {
-			fmt.Println("数据交换文件", fileName, "使用git方式成功发送到了", g.Url, "使用的账户为", g.UserName)
-		}
+		// // 这种方式的目的除了可能是测试clone结果外,还可能是下载数据交换文件的操作,要检查下载了哪些文件.
+		// _, fileNameList, err := filetools.GenerateUnhiddenFilePathNameListFromFolder(g.RepoDir)
+		// if err == nil {
+		// 	for _, fileName := range fileNameList {
+		// 		fmt.Println("数据交换文件", fileName, "从", g.Url, "使用git方式成功下载", "使用的账户为", g.UserName)
+		// 	}
+		// }
 	}
 	return err
 }
@@ -122,6 +144,9 @@ func (g Git) PullFromRepository() error {
 	var err error
 	defer func() {
 		if err != nil {
+			if err.Error() == "already up-to-date" {
+				return
+			}
 			fmt.Println("无法从仓库pull", err)
 		}
 	}()
@@ -147,7 +172,7 @@ func (g Git) PullFromRepository() error {
 func (g Git) CleanRepository() error {
 	var err error
 	defer func() {
-		if err != nil {
+		if err != nil && err.Error() != "already up-to-date" {
 			fmt.Println("无法clean仓库", err)
 		}
 	}()
@@ -188,8 +213,11 @@ func (g Git) CleanRepository() error {
 			Username: g.UserName,
 			Password: g.Password,
 		}})
-	if err == nil {
-		fmt.Println("git", g.Url, "中的内容已被成功清除", "使用的账户为", g.UserName)
+	if err == nil || err.Error() == "already up-to-date" {
+		if err == nil {
+			fmt.Println("git", g.Url, "中的内容已被成功清除", "使用的账户为", g.UserName)
+		}
+		return nil
 	}
 	return err
 }

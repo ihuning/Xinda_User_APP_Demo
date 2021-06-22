@@ -115,14 +115,14 @@ func (w Webdav) UploadFile(webdavDir, localPath string) error {
 }
 
 // 上传一个文件夹中的所有数据交换文件
-func (w Webdav) UploadAllFilesFromFolder() error {
+func (w Webdav) UploadAllFilesFromFolder(sendProgress chan string) error {
 	var err error
 	err = w.Client.Mkdir(w.WebdavDir, 0777) // 如果不存在用来存储数据的临时文件夹,就创建一个
 	if err != nil {
 		fmt.Println("无法在Webdav中创建新文件夹", err)
 		return err
 	}
-	filePathList, fileNameList, err := filetools.GenerateSpecFilePathNameListFromFolder(w.LocalDir)
+	filePathList, fileNameList, err := filetools.GenerateUnhiddenFilePathNameListFromFolder(w.LocalDir)
 	if err != nil {
 		return err
 	}
@@ -135,7 +135,7 @@ func (w Webdav) UploadAllFilesFromFolder() error {
 			fmt.Println("无法上传文件到Webdav", err)
 			return err
 		} else {
-			fmt.Println("数据交换文件", fileNameList[i], "使用WebDav方式成功发送到了", w.Url, "使用的账户为", w.UserName)
+			sendProgress <- ("数据交换文件" +  fileNameList[i] + "使用WebDav方式成功发送到了" + w.Url + "使用的账户为" + w.UserName)
 		}
 	}
 	return err
@@ -161,21 +161,26 @@ func (w Webdav) DownloadAllFilesToFolder() error {
 	return err
 }
 
-// 清除Webdav中"我的Webdav"文件夹里面的所有文件
+// 清除之前使用Webdav下载过的文件
 func (w Webdav) CleanWebdav() error {
 	var err error
-	var webdavFileStatList = make([]*utils.FileStat, 0)
-	w.list(&webdavFileStatList, w.WebdavDir)
-	for _, webdavFileStat := range webdavFileStatList {
-		webdavFilePath := webdavFileStat.Path
-		err = w.Client.Remove(webdavFilePath)
+	_, fileNameList, err := filetools.GenerateUnhiddenFilePathNameListFromFolder(w.LocalDir)
+	if err != nil {
+		return err
+	}
+	if len(fileNameList) == 0 {
+		fmt.Println("没有在", w.Url, "中检测到需要下载的内容")
+		return err
+	}
+	for _, fileName := range fileNameList {
+		webdavDir := filepath.Join(w.WebdavDir, fileName)
+		webdavDir = filepath.ToSlash(webdavDir) // 防止windows强制转换斜杠的格式
+		err = w.Client.Remove(webdavDir)
 		if err != nil {
 			fmt.Println("无法清除Webdav的文件", err)
 			return err
 		}
 	}
-	if err == nil  {
-		fmt.Println("Webdav", w.Url, "中的内容已被成功清除", "使用的账户为", w.UserName)
-	}
+	fmt.Println("Webdav", w.Url, "中的内容已被成功清除", "使用的账户为", w.UserName)
 	return err
 }
