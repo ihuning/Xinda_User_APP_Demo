@@ -13,11 +13,13 @@ import (
 )
 
 // 上传文件夹中的数据交换文件到IFSS
-func UploadToIFSS(sendFolderDir string, neighborJsonParser *jsontools.JsonParser, sendProgress chan string) error {
+func UploadToIFSS(sendFolderDir string, neighborJsonParser *jsontools.JsonParser, sendProgressChannel chan []byte) error {
 	var err error
 	if !filetools.IsPathExists(sendFolderDir) || filetools.IsFolderEmpty(sendFolderDir) {
-		return nil
+		err = fmt.Errorf("无法在文件夹中找到需要上传到IFSS的文件")
+		return err
 	}
+	fmt.Println("在", sendFolderDir, "中找到了需要上传到IFSS的文件")
 	_, receiverName := filepath.Split(sendFolderDir)
 	neighborPublicKeyString := neighborJsonParser.ReadJsonValue("/PublicKey").(string)
 	neighborPublicKey, err := rsatools.StringToPublicKey(neighborPublicKeyString)
@@ -71,19 +73,20 @@ func UploadToIFSS(sendFolderDir string, neighborJsonParser *jsontools.JsonParser
 			if err != nil {
 				return
 			}
-			err = g.PushToRepository(sendProgress)
+			err = g.PushToRepository(sendProgressChannel)
 			if err != nil {
 				return
 			}
 		case "webdav":
 			w := webdavtools.NewWebdavClient(ifssURL, ifssFolderDir, ifssUserName, ifssPassword)
-			err = w.UploadAllFilesFromFolder(sendProgress)
+			err = w.UploadAllFilesFromFolder(sendProgressChannel)
 			if err != nil {
 				return
 			}
 		default:
 			panic("IFSS类型错误")
 		}
+		filetools.RmDir(ifssFolderDir) // 删除IFSS上传使用的文件夹
 	}
 	var wg sync.WaitGroup // 信号量
 	wg.Add(len(filePathGroup))
@@ -91,22 +94,26 @@ func UploadToIFSS(sendFolderDir string, neighborJsonParser *jsontools.JsonParser
 		children := receiverAccountParserList[i]        // 被选中的IFSS平台
 		go uploadGoroutine(&wg, children, filePathList) // 将list中的所有文件打包后上传到这个平台
 	}
+	// for _, filePath := range filePathList {
+	// 	filetools.RmFile(filePath)
+	// }
 	wg.Wait()
-	for _, filePath := range filePathList {
-		filetools.RmFile(filePath)
-	}
 	// err = filetools.RmDir(sendFolderDir) // 删除本地文件,销毁上传记录
 	return err
 }
 
 // 从IFSS下载数据交换文件到receiveDir的以最终接收者命名的文件夹中
-func DownloadFromIFSS(userPrivateKeyPath string, ownAccountListJsonParser *jsontools.JsonParser, receiveDir string) ([]string, error) {
+func DownloadFromIFSS(userPrivateKeyPath string, ownAccountListJsonParser *jsontools.JsonParser, receiveDir string, receiveProgressChannel chan []byte) ([]string, error) {
 	var err error
 	var saveDir string
 	type void struct{}
 	var voidMember void
 	saveDirListSet := make(map[string]void) // 为了去重
 	var saveDirList []string
+	userPrivateKey, err := rsatools.ReadPrivateKeyFile(userPrivateKeyPath)
+	if err != nil {
+		return nil, err
+	}
 	downloadGoroutine := func(wg *sync.WaitGroup, children *jsontools.JsonParser) {
 		defer wg.Done()
 		ifssName := children.ReadJsonValue("/IFSSName").(string)
@@ -118,24 +125,30 @@ func DownloadFromIFSS(userPrivateKeyPath string, ownAccountListJsonParser *jsont
 		switch ifssType {
 		case "git":
 			g := gittools.NewGitClient(ifssURL, ifssDownloadDir, ifssUserName, ifssPassword)
-			err = g.DownloadFromRepository()
+			// if err.Error() == "没有需要下载的内容" {
+			// 	return
+			// }
+			err = g.DownloadFromRepository(receiveProgressChannel)
+			// if err == nil {
+			// err = g.CleanRepository()
+			// }
 			// if err != nil {
 			// 	return
 			// }
 		case "webdav":
 			w := webdavtools.NewWebdavClient(ifssURL, ifssDownloadDir, ifssUserName, ifssPassword)
-			err = w.DownloadAllFilesToFolder()
+			err = w.DownloadAllFilesToFolder(receiveProgressChannel)
+			// err = w.CleanWebdav()
 			// if err != nil {
 			// 	return
 			// }
 		default:
 			panic("IFSS类型错误")
 		}
-		if !filetools.IsPathExists(ifssDownloadDir) { // 如果没有检测到下载下来了新内容
-			fmt.Println("没有在", ifssURL, "中检测到需要下载的内容")
+		filePathList, _, err := filetools.GenerateUnhiddenFilePathNameListFromFolder(ifssDownloadDir)
+		if err != nil || filePathList == nil {
 			return
 		}
-		filePathList, _, _ := filetools.GenerateUnhiddenFilePathNameListFromFolder(ifssDownloadDir)
 		for _, filePath := range filePathList {
 			_, fileName := filepath.Split(filePath)
 			unzipFolderDir := filepath.Join(ifssDownloadDir, fileName+"_ziptemp")
@@ -154,20 +167,18 @@ func DownloadFromIFSS(userPrivateKeyPath string, ownAccountListJsonParser *jsont
 			if err != nil {
 				return
 			}
-			userPrivateKey, err := rsatools.ReadPrivateKeyFile(userPrivateKeyPath)
-			if err != nil {
-				return
-			}
 			receiverNameBytes, err := rsatools.DecryptWithPrivateKey(encryptedReceiverNameBytes, userPrivateKey)
 			if err != nil {
 				return
 			}
 			// 数据交换文件最终存储的文件夹位置
 			saveDir = filepath.Join(receiveDir, string(receiverNameBytes))
-			saveDirListSet[saveDir] = voidMember
-			err = filetools.Rename(specFilePath, filepath.Join(saveDir, fileName))
-			if err != nil {
-				return
+			if !filetools.IsPathExists(filepath.Join(saveDir, fileName)) {
+				saveDirListSet[saveDir] = voidMember
+				err = filetools.Rename(specFilePath, filepath.Join(saveDir, fileName))
+				if err != nil {
+					return
+				}
 			}
 			err = filetools.RmDir(unzipFolderDir)
 			if err != nil {
@@ -222,7 +233,7 @@ func CleanIFSS(ownAccountListJsonParser *jsontools.JsonParser, receiveDir string
 		}
 		// fmt.Println("已经成功清除在线仓库", ifssURL, "中的内容")
 		// 删除本地记录
-		// err = filetools.RmDir(ifssDownloadDir)
+		err = filetools.RmDir(ifssDownloadDir)
 	}
 	return err
 }

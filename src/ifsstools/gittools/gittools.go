@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"path/filepath"
 	"xindauserbackground/src/filetools"
-
+	"xindauserbackground/src/jsontools"
 	git "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/plumbing/transport/http"
+	"strings"
+	// "time"
 )
 
 type Git struct {
@@ -30,7 +32,7 @@ func NewGitClient(url, repoDir, userName, password string) Git {
 }
 
 // 将commit的内容push到在线仓库中
-func (g Git) PushToRepository(sendProgress chan string) error {
+func (g Git) PushToRepository(sendProgressChannel chan []byte) error {
 	var err error
 	defer func() {
 		if err != nil {
@@ -70,16 +72,29 @@ func (g Git) PushToRepository(sendProgress chan string) error {
 			Password: g.Password,
 		},
 	})
-	for _, fileName := range fileNameList {
-		if err == nil {
-			sendProgress <- ("数据交换文件" + fileName + "使用git方式成功发送到了" + g.Url + "使用的账户为" + g.UserName)
-		}
+	if err != nil {
+		// if err.Error() == "command error on refs/heads/master: failed to update ref" {
+		// 	for err.Error() == "command error on refs/heads/master: failed to update ref" { // 如果只是在线仓库忙
+		// 		err = r.Push(&git.PushOptions{
+		// 			Auth: &http.BasicAuth{
+		// 				Username: g.UserName,
+		// 				Password: g.Password,
+		// 			},
+		// 		})
+		// 		time.Sleep(time.Second)
+		// 	}
+		// } else {
+			return err
+		// }
 	}
+	allFileName := strings.Join(fileNameList, " ")	// 连接所有的fileName,用空格分开
+	sendProgressChannelJsonBytes := jsontools.GenerateSendProgressChannelJsonBytes(allFileName, g.Url, g.UserName, len(fileNameList))
+	sendProgressChannel <- sendProgressChannelJsonBytes
 	return err
 }
 
 // 下载仓库中的最新内容,视情况选择clone或者pull
-func (g Git) DownloadFromRepository() error {
+func (g Git) DownloadFromRepository(receiveProgressChannel chan []byte) error {
 	var err error
 	if !filetools.IsPathExists(filepath.Join(g.RepoDir, ".git")) {
 		err = g.CloneRepository()
@@ -90,9 +105,12 @@ func (g Git) DownloadFromRepository() error {
 	if err == nil {
 		if len(fileNameList) == 0 {
 			fmt.Println("没有在", g.Url, "中检测到需要下载的内容")
+			err = fmt.Errorf("没有需要下载的内容")
+			return err
 		}
 		for _, fileName := range fileNameList {
-			fmt.Println("数据交换文件", fileName, "从", g.Url, "使用git方式成功下载", "使用的账户为", g.UserName)
+			receiveProgressChannelJsonBytes := jsontools.GenerateReceiveProgressChannelJsonBytes(fileName, g.Url, g.UserName)
+			receiveProgressChannel <- receiveProgressChannelJsonBytes
 		}
 	}
 	return err
@@ -117,7 +135,7 @@ func (g Git) CloneRepository() error {
 			},
 			URL: g.Url,
 		})
-		err = filetools.RmDir(".git") // 如果有这个文件夹要删除
+		err = filetools.RmDir(filepath.Join(g.RepoDir, ".git")) // 如果有这个文件夹要删除
 		err = filetools.MoveAllFilesToNewFolder(tempDir, g.RepoDir)
 		err = filetools.RmDir(tempDir)
 	} else {
@@ -176,6 +194,8 @@ func (g Git) CleanRepository() error {
 			fmt.Println("无法clean仓库", err)
 		}
 	}()
+	// tempDir := filepath.Join(g.RepoDir, ".temp")
+	// filetools.CopyFolder(filepath.Join(g.RepoDir, ".git"), filepath.Join(g.RepoDir, ".temp", ".git"))
 	r, err := git.PlainOpen(g.RepoDir)
 	if err != nil {
 		return err
@@ -188,7 +208,7 @@ func (g Git) CleanRepository() error {
 	if err != nil {
 		return err
 	}
-	// 获取所有历史上的commits
+	// 获取所有本地历史上的commits
 	cIter, err := r.Log(&git.LogOptions{From: ref.Hash(), All: true})
 	if err != nil {
 		return err
@@ -201,23 +221,58 @@ func (g Git) CleanRepository() error {
 	if err != nil {
 		return err
 	}
-	if err = w.Reset(&git.ResetOptions{
-		Mode:   git.HardReset,
-		Commit: initialHash,
-	}); err != nil {
-		return err
-	}
-	err = r.Push(&git.PushOptions{
-		Force: true,
-		Auth: &http.BasicAuth{
-			Username: g.UserName,
-			Password: g.Password,
-		}})
-	if err == nil || err.Error() == "already up-to-date" {
-		if err == nil {
-			fmt.Println("git", g.Url, "中的内容已被成功清除", "使用的账户为", g.UserName)
+	err = r.Fetch(&git.FetchOptions{
+		RemoteName: "origin",
+	})
+	if err != nil {
+		if err.Error() != "already up-to-date" {
+			return err
+		} else if err.Error() == "already up-to-date" {
+			if err = w.Reset(&git.ResetOptions{
+				Mode:   git.HardReset,
+				Commit: initialHash,
+			}); err != nil {
+				return err
+			}
+			err = r.Push(&git.PushOptions{
+				Force: true,
+				Auth: &http.BasicAuth{
+					Username: g.UserName,
+					Password: g.Password,
+				}})
+			if err == nil || err.Error() == "already up-to-date" {
+				if err == nil {
+					fmt.Println("git", g.Url, "中的内容已被成功清除", "使用的账户为", g.UserName)
+				}
+				return nil
+			}
+			err = filetools.RmDir(g.RepoDir)
 		}
-		return nil
 	}
 	return err
+}
+
+// 检查远端是不是有新的commit
+func isRepoHasRemoteCommits(r *git.Repository) (bool, error) {
+	var err error
+	defer func() {
+		if err != nil {
+			fmt.Println("无法检查远端是不是有新的commit", err)
+		}
+	}()
+	err = r.Fetch(&git.FetchOptions{
+		RemoteName: "origin",
+	})
+	if err != nil {
+		return false, err
+	}
+	remoteLastcommitHash, err := r.ResolveRevision(plumbing.Revision("origin/master"))
+	if err != nil {
+		return false, err
+	}
+	localLastcommitHash, err := r.ResolveRevision(plumbing.Revision("master"))
+	if err != nil {
+		return false, err
+	}
+	return !(remoteLastcommitHash == localLastcommitHash), err
 }

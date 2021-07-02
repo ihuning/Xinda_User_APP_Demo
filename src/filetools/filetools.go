@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"github.com/otiai10/copy"
 )
 
 // 如果文件夹不存在,就生成一个文件夹
@@ -118,6 +119,10 @@ func Copy(oldPath, newPath string) error {
 		return err
 	}
 	return err
+}
+
+func CopyFolder(oldDir, newDir string) error {
+	return copy.Copy(oldDir, newDir)
 }
 
 // 复制一个文件夹中的所有文件到新的文件夹

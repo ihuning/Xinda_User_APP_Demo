@@ -15,13 +15,14 @@ type Header struct {
 	FileDataLength int32     // 对称加密之前数据交换文件的数据部分长度(加密后会多16字节)
 	Timer          int32     // 发送方能接受的最长等待时间
 	DivideMethod   int8      // 数据分片方式(分为2/4/8片)
+	GroupNum       int8      // 分组的数量
 	GroupSN        int8      // 冗余分组序列号
 	FragmentSN     int8      // 数据分片序号(如果是冗余分片,则序号为-1)
 	GroupContent   [8]int8   // 本冗余分组中所有数据分片的FragmentSN
 }
 
 // 生成一个Header
-func (h *Header) generateHeader(senderName, receiverName, fileName string, identification, fileDataLength, timer int32, divideMethod, groupSN, fragmentSN int8, groupContent []int8) {
+func (h *Header) generateHeader(senderName, receiverName, fileName string, identification, fileDataLength, timer int32, divideMethod, groupNum, groupSN, fragmentSN int8, groupContent []int8) {
 	h.SetSenderName(senderName)
 	h.SetReceiverName(receiverName)
 	h.SetFileName(fileName)
@@ -29,6 +30,7 @@ func (h *Header) generateHeader(senderName, receiverName, fileName string, ident
 	h.SetFileDataLength(fileDataLength)
 	h.SetTimer(timer)
 	h.SetDivideMethod(divideMethod)
+	h.SetGroupNum(groupNum)
 	h.SetGroupSN(groupSN)
 	h.SetFragmentSN(fragmentSN)
 	h.SetGroupContent(groupContent)
@@ -68,9 +70,9 @@ func (h *Header) BytesToHeader(readBytes []byte) error {
 }
 
 // 生成一个结构体,并将结构体转为对应的bytes
-func GenerateHeaderBytes(senderName, receiverName, fileName string, identification, fileDataLength, timer int32, divideMethod, groupSN, fragmentSN int8, groupContent []int8) ([]byte, error) {
+func GenerateHeaderBytes(senderName, receiverName, fileName string, identification, fileDataLength, timer int32, divideMethod, groupNum, groupSN, fragmentSN int8, groupContent []int8) ([]byte, error) {
 	var header *Header = &Header{}
-	header.generateHeader(senderName, receiverName, fileName, identification, fileDataLength, timer, divideMethod, groupSN, fragmentSN, groupContent)
+	header.generateHeader(senderName, receiverName, fileName, identification, fileDataLength, timer, divideMethod, groupNum, groupSN, fragmentSN, groupContent)
 	headerBytes, err := header.HeaderToBytes()
 	return headerBytes, err
 }
@@ -131,6 +133,10 @@ func (h Header) GetDivideMethod() int8 {
 	return h.DivideMethod
 }
 
+func (h Header) GetGroupNum() int8 {
+	return h.GroupNum
+}
+
 func (h Header) GetGroupSN() int8 {
 	return h.GroupSN
 }
@@ -179,6 +185,10 @@ func (h *Header) SetTimer(timer int32) {
 
 func (h *Header) SetDivideMethod(divideMethod int8) {
 	(*h).DivideMethod = divideMethod
+}
+
+func (h *Header) SetGroupNum(groupNum int8) {
+	(*h).GroupNum = groupNum
 }
 
 func (h *Header) SetGroupSN(groupSN int8) {

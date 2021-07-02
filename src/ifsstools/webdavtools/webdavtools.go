@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"xindauserbackground/src/filetools"
+	"xindauserbackground/src/jsontools"
 	"xindauserbackground/src/ifsstools/webdavtools/utils"
 
 	"github.com/studio-b12/gowebdav"
@@ -31,6 +32,7 @@ func NewWebdavClient(url, localDir, userName, password string) Webdav {
 		LocalDir:  localDir,
 		Client:    client,
 	}
+	filetools.Mkdir(localDir)
 	return w
 }
 
@@ -115,7 +117,7 @@ func (w Webdav) UploadFile(webdavDir, localPath string) error {
 }
 
 // 上传一个文件夹中的所有数据交换文件
-func (w Webdav) UploadAllFilesFromFolder(sendProgress chan string) error {
+func (w Webdav) UploadAllFilesFromFolder(sendProgressChannel chan []byte) error {
 	var err error
 	err = w.Client.Mkdir(w.WebdavDir, 0777) // 如果不存在用来存储数据的临时文件夹,就创建一个
 	if err != nil {
@@ -135,14 +137,15 @@ func (w Webdav) UploadAllFilesFromFolder(sendProgress chan string) error {
 			fmt.Println("无法上传文件到Webdav", err)
 			return err
 		} else {
-			sendProgress <- ("数据交换文件" +  fileNameList[i] + "使用WebDav方式成功发送到了" + w.Url + "使用的账户为" + w.UserName)
+			sendProgressChannelJsonBytes := jsontools.GenerateSendProgressChannelJsonBytes(fileNameList[i], w.Url, w.UserName, 1)
+			sendProgressChannel <- sendProgressChannelJsonBytes
 		}
 	}
 	return err
 }
 
 // 下载一个文件夹里面的所有数据交换文件
-func (w Webdav) DownloadAllFilesToFolder() error {
+func (w Webdav) DownloadAllFilesToFolder(receiveProgressChannel chan []byte) error {
 	var err error
 	var webdavFileStatList = make([]*utils.FileStat, 0)
 	w.list(&webdavFileStatList, w.WebdavDir)
@@ -155,7 +158,8 @@ func (w Webdav) DownloadAllFilesToFolder() error {
 			fmt.Println("无法从Webdav下载文件", err)
 			return err
 		} else {
-			fmt.Println("数据交换文件", webdavFileName, "从", w.Url, "使用WebDav方式成功下载", "使用的账户为", w.UserName)
+			receiveProgressChannelJsonBytes := jsontools.GenerateReceiveProgressChannelJsonBytes(webdavFileName, w.Url, w.UserName)
+			receiveProgressChannel <- receiveProgressChannelJsonBytes
 		}
 	}
 	return err

@@ -3,8 +3,10 @@ package jsontools
 import (
 	// "bytes"
 	"crypto/rand"
+	"path/filepath"
 	// "math"
 	"math/big"
+	// "strconv"
 	"os"
 )
 
@@ -42,7 +44,7 @@ func GenerateSendStrategyJsonBytes(divideMethod, groupNum int, senderName, recei
 	jsonParser := GenerateNewJsonParser()
 	fileInfo, _ := os.Stat(srcFilePath)
 	identification, _ := rand.Int(rand.Reader, big.NewInt(2147483647))
-    jsonParser.SetValue("send_strategy", "MsgType")
+	jsonParser.SetValue("send_strategy", "MsgType")
 	jsonParser.SetValue(divideMethod, "DivideMethod")
 	jsonParser.SetValue(groupNum, "GroupNum")
 	jsonParser.SetValue(senderName, "SenderName")
@@ -54,11 +56,48 @@ func GenerateSendStrategyJsonBytes(divideMethod, groupNum int, senderName, recei
 	return jsonParser.GenerateJsonBytes()
 }
 
-// *发送到IFSS时*一起放在压缩包里面的配置文件的json bytes
-func GenerateZipInfoJsonBytes(receiverName string, identification int) []byte {
+// 反馈给发送进程的发送进度
+func GenerateSendProgressChannelJsonBytes(fileName, url, userName string, sendNum int) ([]byte,) {
 	jsonParser := GenerateNewJsonParser()
-	jsonParser.SetValue(receiverName, "ReceiverName")
+	jsonParser.SetValue(fileName, "FileName")
+	jsonParser.SetValue(url, "URL")
+	jsonParser.SetValue(userName, "UserName")
+	jsonParser.SetValue(sendNum, "SendNum")
+	return jsonParser.GenerateJsonBytes()
+}
+
+// 反馈给接收进程的接收进度
+func GenerateReceiveProgressChannelJsonBytes(fileName, url, userName string) []byte {
+	jsonParser := GenerateNewJsonParser()
+	jsonParser.SetValue(fileName, "FileName")
+	jsonParser.SetValue(url, "URL")
+	jsonParser.SetValue(userName, "UserName")
+	return jsonParser.GenerateJsonBytes()
+}
+
+// 反馈给前端的发送进度
+func GenerateSendProgressJsonBytes(srcFilePath string, identification, successSendNum, totalNum int) []byte {
+	jsonParser := GenerateNewJsonParser()
+	jsonParser.SetValue("sendProgress", "MsgType")
 	jsonParser.SetValue(identification, "Identification")
+	// jsonParser.SetValue(srcFilePath, "SrcFilePath")
+	jsonParser.SetValue(int(100*float64(successSendNum)/float64(totalNum)), "Percentage")
+	return jsonParser.GenerateJsonBytes()
+}
+
+// 反馈给前端的组合进度
+func GenerateRestoreProgressJsonBytes(dstFilePath, senderName, receiverName string, fileDataLength, identification, successReceiveNum, totalNum int) []byte {
+	jsonParser := GenerateNewJsonParser()
+	jsonParser.SetValue("receiveProgress", "MsgType")
+	jsonParser.SetValue(fileDataLength, "FileDataLength")
+	_, fileName := filepath.Split(dstFilePath)
+	// relativePath := filepath.Join("./还原结果", strconv.Itoa(identification), fileName)
+	// jsonParser.SetValue(relativePath, "DstFilePath")
+	jsonParser.SetValue(senderName, "SenderName")
+	jsonParser.SetValue(receiverName, "ReceiverName")
+	jsonParser.SetValue(fileName, "FileName")
+	jsonParser.SetValue(identification, "Identification")
+	jsonParser.SetValue(int(100*float64(successReceiveNum)/float64(totalNum)), "Percentage")
 	return jsonParser.GenerateJsonBytes()
 }
 
