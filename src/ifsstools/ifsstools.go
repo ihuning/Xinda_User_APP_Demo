@@ -1,3 +1,4 @@
+// IFSS的上传/下载/清除的方法.
 package ifsstools
 
 import (

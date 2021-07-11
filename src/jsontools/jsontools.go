@@ -1,3 +1,4 @@
+// json的生成和读写操作,以及通信内容的生成方法.
 package jsontools
 
 import (
@@ -8,25 +9,18 @@ import (
 	"github.com/Jeffail/gabs/v2"
 )
 
+// json各方法的容器
 type JsonParser struct {
 	Parser *gabs.Container
 }
 
 // 存储IFSS信息
 type IFSSInfo struct {
-	IFSSName         string
-	IFSSType         string
-	IFSSURL          string
-	IFSSUserName     string
-	IFSSUserPassword string
-}
-
-// 存储数据交换文件信息
-type SpecFileInfo struct {
-	IFSSName     string
-	SpecFileName string
-	FragmentSN   string
-	PaddingSize  string
+	IFSSName         string // 操作IFSS的名称
+	IFSSType         string // IFSS类型(如git,webdav)
+	IFSSURL          string // IFSS的URL
+	IFSSUserName     string // 操作IFSS使用的账户
+	IFSSUserPassword string // 账户的密码
 }
 
 // 生成一个空的jsonparser
@@ -148,4 +142,3 @@ func (j *JsonParser) WriteJsonFile(filePath string) error {
 	}
 	return err
 }
-

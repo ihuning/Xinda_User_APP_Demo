@@ -1,3 +1,4 @@
+// git的上传/下载/清空方法.
 package gittools
 
 import (
@@ -10,9 +11,9 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/plumbing/transport/http"
 	"strings"
-	// "time"
 )
 
+// git方法的容器
 type Git struct {
 	UserName string
 	Password string

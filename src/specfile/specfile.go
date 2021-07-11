@@ -1,3 +1,4 @@
+// 数据交换文件的构成与结构,分为头部/对称密钥/Nonce/数据分片/签名/padding.
 package specfile
 
 import (
@@ -339,7 +340,7 @@ func restoreFromFilePathList(fileSaveDir string, filePathList []string, receiver
 		if err != nil {
 			return err
 		}
-		header, err := header.ReadHeaderFromSpecFileBytes(unencryptedHeaderBytes)
+		header, err := header.BytesToHeader(unencryptedHeaderBytes)
 		if err != nil {
 			return err
 		}
@@ -411,9 +412,12 @@ func restoreFromFilePathList(fileSaveDir string, filePathList []string, receiver
 	if err != nil {
 		return err
 	}
-	// 当前还原进度为100%
-	restoreProgressJsonBytes := jsontools.GenerateRestoreProgressJsonBytes(dstAbsFilePath, senderName, receiverName, fileDataLength, identification, 100, 100)
-	restoreProgressChannel <- restoreProgressJsonBytes
+	if filetools.IsPathExists(fileSavePath) {
+		// 当前还原进度为100%
+		fmt.Println("已经还原出文件", fileSavePath)
+		restoreProgressJsonBytes := jsontools.GenerateRestoreProgressJsonBytes(dstAbsFilePath, senderName, receiverName, fileDataLength, identification, 100, 100)
+		restoreProgressChannel <- restoreProgressJsonBytes
+	}
 	return err
 }
 
@@ -512,7 +516,7 @@ func DivideToIdentificationList(specFileFolderDir, receiverPrivateKeyFilePath st
 		if err != nil {
 			return err
 		}
-		header, err := header.ReadHeaderFromSpecFileBytes(unencryptedHeaderBytes)
+		header, err := header.BytesToHeader(unencryptedHeaderBytes)
 		if err != nil {
 			return err
 		}

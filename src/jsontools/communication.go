@@ -10,36 +10,7 @@ import (
 	"os"
 )
 
-// // *通信方*生成身份注册阶段1的json文件,返回生成的json的bytes
-// func GenerateRegisterStage1JsonBytes(userName, userPublicKeyString string) []byte {
-// 	jsonParser := GenerateNewJsonParser()
-// 	jsonParser.SetValue("register_stage_1", "MsgType")
-// 	jsonParser.SetValue(userName, "UserName")
-// 	jsonParser.SetValue(userPublicKeyString, "UserPublicKey")
-// 	return jsonParser.GenerateJsonBytes()
-// }
-
-// // *控制中心*生成身份注册阶段2的json文件,返回生成的json的bytes
-// func GenerateRegisterStage2JsonBytes(jsonParser_old *JsonParser, registerResult bool, refuseReason string) []byte {
-// 	jsonParser := GenerateNewJsonParser()
-// 	userName := jsonParser_old.ReadJsonValue("/UserName").(string)
-// 	jsonParser.SetValue("register_stage_2", "MsgType")
-// 	jsonParser.SetValue(userName, "UserName")
-// 	jsonParser.SetValue(registerResult, "RegisterResult")
-// 	jsonParser.SetValue(refuseReason, "RefuseReason")
-// 	return jsonParser.GenerateJsonBytes()
-// }
-
-// // *通信方*生成身份注册阶段3的json文件,返回生成的json的bytes
-// func GenerateRegisterStage3JsonBytes(jsonParser_old *JsonParser) []byte {
-// 	jsonParser := GenerateNewJsonParser()
-// 	userName := jsonParser_old.ReadJsonValue("/UserName").(string)
-// 	jsonParser.SetValue("register_stage_3", "MsgType")
-// 	jsonParser.SetValue(userName, "UserName")
-// 	return jsonParser.GenerateJsonBytes()
-// }
-
-// *前端*生成的发送阶段配置json文件,返回生成的json的bytes
+// 前端生成的发送阶段配置json文件,返回生成的json的bytes
 func GenerateSendStrategyJsonBytes(divideMethod, groupNum int, senderName, receiverName, srcFilePath string, timer int) []byte {
 	jsonParser := GenerateNewJsonParser()
 	fileInfo, _ := os.Stat(srcFilePath)

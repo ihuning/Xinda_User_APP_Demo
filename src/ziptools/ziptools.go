@@ -1,3 +1,5 @@
+// 压缩和解压文件.
+//  为了让经过的接入节点知道接收方代号,需要将一些信息存储在一个使用接入节点的公钥加密的文本文件里,并和数据交换文件一起打包.
 package ziptools
 
 import (
@@ -44,9 +46,7 @@ func addFileToZip(zipWriter *zip.Writer, filename string) error {
 	return err
 }
 
-// ZipFiles compresses one or many files into a single zip archive file.
-// Param 1: src is a list of files to add to the zip.
-// Param 2: dst is the output zip file's name.
+// 将src的多个文件压缩成一个文件并保存到dst
 func ZipFiles(src []string, dst string) error {
 
 	newZipFile, err := os.Create(dst)
@@ -67,8 +67,7 @@ func ZipFiles(src []string, dst string) error {
 	return nil
 }
 
-// Unzip will decompress a zip archive, moving all files and folders
-// within the zip file (parameter 1) to an output directory (parameter 2).
+// 解压缩文件
 func UnzipFile(src string, dest string) ([]string, error) {
 
 	var filenames []string

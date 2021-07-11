@@ -1,3 +1,4 @@
+// 邮箱服务器的上传/下载/清空方法.
 package emailtools
 
 import (

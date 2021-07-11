@@ -1,3 +1,5 @@
+// 数据交换文件的数据分片的切分和组合方法.
+//  发送方按照一定的分片策略将待发送文件分成多个数据分片,使用对称密钥加密.接收方根据头部信息将这些分片进行组合.
 package fragment
 
 import (
@@ -9,7 +11,7 @@ import (
 
 type DivideMethod int
 
-// 三种不同的分片策略
+// 三种不同的分片策略(分为2/4/8片)
 const (
 	FRAGMNETS_2 DivideMethod = 2
 	FRAGMNETS_4 DivideMethod = 4

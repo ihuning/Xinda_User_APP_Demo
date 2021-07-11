@@ -1,3 +1,4 @@
+// git的上传/下载/清空方法.
 package webdavtools
 
 import (
@@ -12,6 +13,7 @@ import (
 	"github.com/studio-b12/gowebdav"
 )
 
+// webdav的容器
 type Webdav struct {
 	UserName  string
 	Password  string
@@ -185,6 +187,6 @@ func (w Webdav) CleanWebdav() error {
 			return err
 		}
 	}
-	fmt.Println("Webdav", w.Url, "中的内容已被成功清除", "使用的账户为", w.UserName)
+	fmt.Println("Webdav", w.Url, "中的", fileNameList, "已被成功清除", "使用的账户为", w.UserName)
 	return err
 }

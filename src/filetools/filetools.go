@@ -1,3 +1,4 @@
+// 对文件和文件夹的操作的相关方法的封装.
 package filetools
 
 import (
@@ -121,6 +122,7 @@ func Copy(oldPath, newPath string) error {
 	return err
 }
 
+// 复制整个文件夹到新的位置
 func CopyFolder(oldDir, newDir string) error {
 	return copy.Copy(oldDir, newDir)
 }

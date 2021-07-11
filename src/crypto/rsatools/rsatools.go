@@ -1,3 +1,5 @@
+// 非对称加解密方法.
+//  公钥在双方通信之前均已派发完毕.
 package rsatools
 
 import (

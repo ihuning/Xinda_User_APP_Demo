@@ -1,3 +1,4 @@
+// 生成一段定长的随机bytes.
 package padding
 
 import (
